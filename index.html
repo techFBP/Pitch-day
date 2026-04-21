@@ -138,6 +138,8 @@ body{font-family:var(--sans);background:var(--surface);color:var(--text);min-hei
 .empty{text-align:center;padding:40px 20px;color:var(--text3)}
 .empty-icon{font-size:36px;margin-bottom:10px}
 .warn{background:#fff8e1;border:1px solid #ffe082;border-radius:var(--rs);padding:10px 12px;font-size:13px;color:#7a5700;margin-bottom:14px}
+.guest-badge{background:rgba(245,200,66,.15);color:var(--accent);font-family:var(--mono);font-size:10px;font-weight:500;padding:2px 7px;border-radius:4px;letter-spacing:.05em}
+body.guest-mode .admin-only{display:none!important}
 </style>
 </head>
 <body>
@@ -159,6 +161,7 @@ body{font-family:var(--sans);background:var(--surface);color:var(--text);min-hei
   <div class="hdr-inner">
     <span class="hdr-logo">&#9917;</span>
     <span class="hdr-title">Pitch Day</span>
+    <span id="guest-badge" class="guest-badge hidden">GUEST</span>
     <div class="sync-dot" id="sync-dot" title="Sync status"></div>
   </div>
   <nav class="nav">
@@ -175,7 +178,7 @@ body{font-family:var(--sans);background:var(--surface);color:var(--text);min-hei
   <div class="stats" id="roster-stats"></div>
   <div class="between mb16">
     <span class="slabel" style="margin-bottom:0">Players</span>
-    <div style="display:flex;gap:8px">
+    <div style="display:flex;gap:8px" class="admin-only">
       <button class="btn btn-g btn-sm" onclick="openIO()">&#8645; Import / Export</button>
       <button class="btn btn-p btn-sm" onclick="openAddPlayer()">+ Add Player</button>
     </div>
@@ -192,7 +195,7 @@ body{font-family:var(--sans);background:var(--surface);color:var(--text);min-hei
   </div>
 
   <!-- PASTE LIST -->
-  <div class="card mb16">
+  <div class="card mb16 admin-only">
     <div class="between" style="margin-bottom:8px">
       <span style="font-weight:500;font-size:14px">&#128203; Paste Player List</span>
       <button class="btn btn-g btn-sm" onclick="togglePasteBox()">Toggle</button>
@@ -300,7 +303,7 @@ body{font-family:var(--sans);background:var(--surface);color:var(--text);min-hei
     </div>
     <div class="fg">
       <label class="fl">Skill Rating: <span id="mp-rat-val" style="color:var(--green);font-weight:600">3.0</span> / 5</label>
-      <input type="range" id="mp-rating" min="1" max="5" step="0.5" value="3" style="width:100%">
+      <input type="range" id="mp-rating" min="1" max="5" step="0.1" value="3" style="width:100%">
     </div>
     <div style="display:flex;gap:10px;margin-top:6px">
       <button class="btn btn-g" style="flex:1" onclick="closeM('m-player')">Cancel</button>
@@ -343,7 +346,7 @@ body{font-family:var(--sans);background:var(--surface);color:var(--text);min-hei
     </div>
     <div class="fg">
       <label class="fl">Skill Rating: <span id="np-rat-val" style="color:var(--green);font-weight:600">3.0</span> / 5</label>
-      <input type="range" id="np-rating" min="1" max="5" step="0.5" value="3" style="width:100%">
+      <input type="range" id="np-rating" min="1" max="5" step="0.1" value="3" style="width:100%">
     </div>
     <div style="display:flex;gap:10px;margin-top:6px">
       <button class="btn btn-g" style="flex:1" onclick="skipNewPlayer()">Skip</button>
@@ -359,7 +362,7 @@ body{font-family:var(--sans);background:var(--surface);color:var(--text);min-hei
     <div class="mtitle" id="qr-title">Update Rating</div>
     <div class="fg">
       <label class="fl">Skill Rating: <span id="qr-rat-val" style="color:var(--green);font-weight:600">3.0</span> / 5</label>
-      <input type="range" id="qr-rating" min="1" max="5" step="0.5" value="3" style="width:100%">
+      <input type="range" id="qr-rating" min="1" max="5" step="0.1" value="3" style="width:100%">
     </div>
     <div style="display:flex;gap:10px;margin-top:6px">
       <button class="btn btn-g" style="flex:1" onclick="closeM('m-quickrate')">Cancel</button>
@@ -444,10 +447,19 @@ const db = getDatabase(fbApp);
 
 // PASSWORD
 const PASSWORD = "pitchday2026";
+const GUEST_PASSWORD = "soccer";
+
+var isGuest = false;
 
 window.unlock = function() {
   var val = document.getElementById('lock-input').value;
   if (val === PASSWORD) {
+    isGuest = false;
+    document.getElementById('lock-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    initApp();
+  } else if (val === GUEST_PASSWORD) {
+    isGuest = true;
     document.getElementById('lock-screen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     initApp();
@@ -551,7 +563,7 @@ function renderRoster() {
     '<div class="sbox"><div class="snum">'+state.sessions.length+'</div><div class="slbl2">Sessions</div></div>';
   var el=document.getElementById('roster-list');
   if(!pl.length){el.innerHTML='<div class="empty"><div class="empty-icon">&#128101;</div><div style="font-size:14px">No players yet.<br>Tap + Add Player to get started.</div></div>';return;}
-  var sorted=pl.slice().sort(function(a,b){return parseFloat(b.rating||0)-parseFloat(a.rating||0);});
+  var sorted=pl.slice().sort(function(a,b){return a.name.localeCompare(b.name);});
   var h='';
   for(var i=0;i<sorted.length;i++){
     var p=sorted[i],rat=parseFloat(p.rating||3);
@@ -857,15 +869,56 @@ function renderHistory(){
   var tg=ss.reduce(function(s,x){return s+(x.scoreA||0)+(x.scoreB||0);},0);
   var aa=ss.length?Math.round(ss.reduce(function(s,x){return s+(x.attendees?x.attendees.length:0);},0)/ss.length):0;
   document.getElementById('hist-stats').innerHTML='<div class="sbox"><div class="snum">'+ss.length+'</div><div class="slbl2">Sessions</div></div><div class="sbox"><div class="snum">'+tg+'</div><div class="slbl2">Goals</div></div><div class="sbox"><div class="snum">'+aa+'</div><div class="slbl2">Avg Players</div></div>';
+
+  // Build appearances map
+  var appMap={};
+  for(var si=0;si<ss.length;si++){
+    var atts=ss[si].attendees||[];
+    for(var ai=0;ai<atts.length;ai++){
+      appMap[atts[ai]]=(appMap[atts[ai]]||0)+1;
+    }
+  }
+  // Sort players by appearances desc
+  var appList=state.players.map(function(p){return{p:p,count:appMap[p.id]||0};});
+  appList.sort(function(a,b){return b.count-a.count||a.p.name.localeCompare(b.p.name);});
+
   var el=document.getElementById('hist-list');
-  if(!ss.length){el.innerHTML='<div class="empty"><div class="empty-icon">&#128197;</div><div style="font-size:14px">No sessions logged yet.</div></div>';return;}
   var h='';
-  for(var i=0;i<ss.length;i++){
-    var sess=ss[i],d=new Date(sess.date+'T12:00:00');
-    var ds=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-    var top='';
-    if(sess.goals){var pairs=Object.keys(sess.goals).map(function(id){return[id,sess.goals[id]];}).sort(function(a,b){return b[1]-a[1];});var names=[];for(var k=0;k<Math.min(3,pairs.length);k++){var gp=getPlayer(pairs[k][0]);if(gp)names.push(gp.name.split(' ')[0]+' \u00d7'+pairs[k][1]);}if(names.length)top=' \u00b7 \u26bd '+names.join(', ');}
-    h+='<div class="hscard" onclick="viewSess(\''+sess.id+'\')"><div class="between"><span class="hsdate">'+ds+'</span><span style="font-family:var(--mono);font-size:10px;color:var(--text3)">'+sess.format+'v'+sess.format+'</span></div><div class="hsscore">'+(sess.scoreA||0)+' &ndash; '+(sess.scoreB||0)+'</div><div class="hsmeta">'+(sess.attendees?sess.attendees.length:0)+' players'+top+(sess.notes?' \u00b7 '+sess.notes:'')+'</div></div>';
+
+  // Appearances leaderboard
+  if(appList.length){
+    h+='<span class="slabel">Appearances</span>';
+    h+='<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">';
+    for(var li=0;li<appList.length;li++){
+      var item=appList[li];
+      var pct=ss.length?Math.round((item.count/ss.length)*100):0;
+      var pos=(item.p.positions&&item.p.positions.length)?item.p.positions[0]:'—';
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--surface)">' +
+        '<div style="font-family:var(--mono);font-size:11px;color:var(--text3);width:20px;text-align:right">'+(li+1)+'</div>'+
+        '<div style="flex:1">'+
+          '<div style="font-size:13px;font-weight:500">'+item.p.name+'</div>'+
+          '<div style="height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden">'+
+            '<div style="height:100%;width:'+pct+'%;background:var(--green-mid);border-radius:2px"></div>'+
+          '</div>'+
+        '</div>'+
+        '<span class="ptag" style="flex-shrink:0">'+pos+'</span>'+
+        '<div style="font-family:var(--mono);font-size:13px;font-weight:500;color:var(--green-dark);min-width:32px;text-align:right">'+item.count+'<span style="font-size:10px;color:var(--text3);font-weight:400"> games</span></div>'+
+      '</div>';
+    }
+    h+='</div>';
+  }
+
+  // Session log
+  h+='<span class="slabel">Session Log</span>';
+  if(!ss.length){h+='<div class="empty"><div class="empty-icon">&#128197;</div><div style="font-size:14px">No sessions logged yet.</div></div>';}
+  else{
+    for(var i=0;i<ss.length;i++){
+      var sess=ss[i],d=new Date(sess.date+'T12:00:00');
+      var ds=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+      var top='';
+      if(sess.goals){var pairs=Object.keys(sess.goals).map(function(id){return[id,sess.goals[id]];}).sort(function(a,b){return b[1]-a[1];});var names=[];for(var k=0;k<Math.min(3,pairs.length);k++){var gp=getPlayer(pairs[k][0]);if(gp)names.push(gp.name.split(' ')[0]+' \u00d7'+pairs[k][1]);}if(names.length)top=' \u00b7 \u26bd '+names.join(', ');}
+      h+='<div class="hscard" onclick="viewSess(\''+sess.id+'\')"><div class="between"><span class="hsdate">'+ds+'</span><span style="font-family:var(--mono);font-size:10px;color:var(--text3)">'+sess.format+'v'+sess.format+'</span></div><div class="hsscore">'+(sess.scoreA||0)+' &ndash; '+(sess.scoreB||0)+'</div><div class="hsmeta">'+(sess.attendees?sess.attendees.length:0)+' players'+top+(sess.notes?' \u00b7 '+sess.notes:'')+'</div></div>';
+    }
   }
   el.innerHTML=h;
 }
