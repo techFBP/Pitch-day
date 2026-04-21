@@ -168,7 +168,7 @@ body.guest-mode .admin-only{display:none!important}
     <button class="ntab on" id="t-roster" onclick="go('roster')"><span class="ntab-icon">&#128101;</span>Roster</button>
     <button class="ntab" id="t-session" onclick="go('session')"><span class="ntab-icon">&#128203;</span>Session</button>
     <button class="ntab" id="t-teams" onclick="go('teams')"><span class="ntab-icon">&#127937;</span>Teams</button>
-    <button class="ntab" id="t-postgame" onclick="go('postgame')"><span class="ntab-icon">&#128202;</span>Post-Game</button>
+    <button class="ntab admin-only" id="t-postgame" onclick="go('postgame')"><span class="ntab-icon">&#128202;</span>Post-Game</button>
     <button class="ntab" id="t-history" onclick="go('history')"><span class="ntab-icon">&#128197;</span>History</button>
   </nav>
 </div>
@@ -219,7 +219,7 @@ body.guest-mode .admin-only{display:none!important}
   </div>
   <div class="between mb16">
     <span class="slabel" style="margin-bottom:0">RSVP List</span>
-    <div style="display:flex;gap:8px">
+    <div style="display:flex;gap:8px" class="admin-only">
       <button class="btn btn-g btn-sm" onclick="selAll(true)">All &#10003;</button>
       <button class="btn btn-g btn-sm" onclick="selAll(false)">Clear</button>
     </div>
@@ -232,7 +232,7 @@ body.guest-mode .admin-only{display:none!important}
   <div id="teams-warn" class="warn hidden"></div>
   <div class="between mb16">
     <span class="slabel" style="margin-bottom:0">Generated Teams</span>
-    <button class="btn btn-a btn-sm" onclick="genTeams()">&#128256; Re-shuffle</button>
+    <button class="btn btn-a btn-sm admin-only" onclick="genTeams()">&#128256; Re-shuffle</button>
   </div>
   <div id="teams-out">
     <div class="empty"><div class="empty-icon">&#9917;</div><div style="font-size:14px">Confirm players in Session tab,<br>then come back to generate teams.</div></div>
@@ -277,8 +277,7 @@ body.guest-mode .admin-only{display:none!important}
 
 <!-- HISTORY -->
 <div class="page" id="p-history">
-  <div class="stats" id="hist-stats"></div>
-  <span class="slabel">Past Sessions</span>
+  <span class="slabel">Appearances</span>
   <div id="hist-list"></div>
 </div>
 </div>
@@ -488,6 +487,10 @@ function saveToFirebase(data) {
 }
 
 function initApp() {
+  if (isGuest) {
+    document.body.classList.add('guest-mode');
+    document.getElementById('guest-badge').classList.remove('hidden');
+  }
   setSyncStatus('ing');
   onValue(ref(db, 'pitchday'), function(snapshot) {
     var data = snapshot.val();
@@ -569,10 +572,10 @@ function renderRoster() {
     var p=sorted[i],rat=parseFloat(p.rating||3);
     var posH=(p.positions&&p.positions.length)?p.positions.map(function(x){return'<span class="ptag">'+x+'</span>';}).join(''):'<span style="color:var(--text3);font-size:12px">No position set</span>';
     var dotsH='';for(var d=0;d<5;d++)dotsH+='<div class="dot'+(d<Math.round(rat)?' on':'')+'"></div>';
-    h+='<div class="pcard" onclick="openEdit(\''+p.id+'\')">'+
+    h+='<div class="pcard" onclick="'+(isGuest?'':' openEdit(\''+p.id+'\')')+'">'+
       '<div class="avatar">'+initials(p.name)+'</div>'+
       '<div class="pinfo"><div class="pname">'+p.name+'</div><div class="pmeta">'+posH+'</div><div class="dots">'+dotsH+'</div></div>'+
-      '<span class="rbadge '+rClass(rat)+'" onclick="event.stopPropagation();openQuickRate(\''+p.id+'\')" title="Tap to update rating">'+fmtR(rat)+'</span>'+
+      '<span class="rbadge '+rClass(rat)+'" '+(isGuest?'':' onclick="event.stopPropagation();openQuickRate(\''+p.id+'\')" title="Tap to update rating"')+'>'+fmtR(rat)+'</span>'+
     '</div>';
   }
   el.innerHTML=h;
@@ -667,7 +670,7 @@ function renderSession(){
   var h='';
   for(var i=0;i<sorted.length;i++){
     var p=sorted[i],on=state.confirmed.indexOf(p.id)>=0;
-    h+='<div class="ritem" onclick="toggleConf(\''+p.id+'\')">'+
+    h+='<div class="ritem" '+(isGuest?'':' onclick="toggleConf(\''+p.id+'\')"')+' style="cursor:'+(isGuest?'default':'pointer')+'">'+
       '<div class="rcheck'+(on?' on':'')+'">'+( on?'&#10003;':'')+'</div>'+
       '<div class="avatar" style="width:32px;height:32px;font-size:11px">'+initials(p.name)+'</div>'+
       '<div style="flex:1"><div style="font-weight:500;font-size:14px">'+p.name+'</div>'+
@@ -789,13 +792,56 @@ window.genTeams=function(){
   var warn=document.getElementById('teams-warn');
   if(players.length<2){warn.classList.remove('hidden');warn.textContent='Confirm at least 2 players in the Session tab first.';document.getElementById('teams-out').innerHTML='';return;}
   warn.classList.add('hidden');
-  var sh=players.slice();
-  for(var i=sh.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=sh[i];sh[i]=sh[j];sh[j]=t;}
+
+  var needed=state.format*2;
+  var bench=[];
+  var pool=players.slice();
+
+  // If more players than needed, bench the lowest-rated first (randomly among ties)
+  if(pool.length>needed){
+    pool.sort(function(a,b){return parseFloat(a.rating||0)-parseFloat(b.rating||0)||(Math.random()-.5);});
+    bench=pool.splice(0,pool.length-needed);
+  }
+
+  // Position priority order for assigning
+  var POS_ORDER=['GK','DEF','MID','FWD'];
+
+  // Sort pool by position priority then rating desc, with small random nudge for variety
+  pool.sort(function(a,b){
+    var aPos=a.positions&&a.positions.length?POS_ORDER.indexOf(a.positions[0]):-1;
+    var bPos=b.positions&&b.positions.length?POS_ORDER.indexOf(b.positions[0]):-1;
+    if(aPos<0)aPos=99; if(bPos<0)bPos=99;
+    if(aPos!==bPos)return aPos-bPos;
+    return parseFloat(b.rating||0)-parseFloat(a.rating||0)+(Math.random()*.4-.2);
+  });
+
+  // Greedy balanced split: always assign next player to the team with lower total rating
   var tA=[],tB=[],sA=0,sB=0;
-  for(var k=0;k<sh.length;k++){if(sA<=sB){tA.push(sh[k]);sA+=parseFloat(sh[k].rating||0);}else{tB.push(sh[k]);sB+=parseFloat(sh[k].rating||0);}}
-  var needed=state.format*2,bench=[];
-  while(tA.length+tB.length>needed){var from=tA.length>tB.length?tA:tB;bench.push(from.pop());}
-  state.lastTeams={teamA:tA,teamB:tB,bench:bench,format:state.format};saveState();renderTeamsOutput();
+  for(var k=0;k<pool.length;k++){
+    if(sA<=sB){tA.push(pool[k]);sA+=parseFloat(pool[k].rating||0);}
+    else{tB.push(pool[k]);sB+=parseFloat(pool[k].rating||0);}
+  }
+
+  // Improvement pass: try swapping pairs to reduce rating difference
+  var improved=true,passes=0;
+  while(improved&&passes<20){
+    improved=false;passes++;
+    var diff=Math.abs(sA-sB);
+    for(var i=0;i<tA.length&&!improved;i++){
+      for(var j=0;j<tB.length&&!improved;j++){
+        var ra=parseFloat(tA[i].rating||0),rb=parseFloat(tB[j].rating||0);
+        var newDiff=Math.abs((sA-ra+rb)-(sB-rb+ra));
+        if(newDiff<diff-0.05){
+          var tmp=tA[i];tA[i]=tB[j];tB[j]=tmp;
+          sA=sA-ra+rb;sB=sB-rb+ra;
+          improved=true;
+        }
+      }
+    }
+  }
+
+  state.lastTeams={teamA:tA,teamB:tB,bench:bench,format:state.format};
+  saveState();renderTeamsOutput();
 };
 
 function renderTeams(){
@@ -866,9 +912,6 @@ window.saveSession=function(){
 // ─── HISTORY ─────────────────────────────────────────────────────────────────
 function renderHistory(){
   var ss=state.sessions;
-  var tg=ss.reduce(function(s,x){return s+(x.scoreA||0)+(x.scoreB||0);},0);
-  var aa=ss.length?Math.round(ss.reduce(function(s,x){return s+(x.attendees?x.attendees.length:0);},0)/ss.length):0;
-  document.getElementById('hist-stats').innerHTML='<div class="sbox"><div class="snum">'+ss.length+'</div><div class="slbl2">Sessions</div></div><div class="sbox"><div class="snum">'+tg+'</div><div class="slbl2">Goals</div></div><div class="sbox"><div class="snum">'+aa+'</div><div class="slbl2">Avg Players</div></div>';
 
   // Build appearances map
   var appMap={};
@@ -885,15 +928,16 @@ function renderHistory(){
   var el=document.getElementById('hist-list');
   var h='';
 
-  // Appearances leaderboard
-  if(appList.length){
-    h+='<span class="slabel">Appearances</span>';
+  if(!appList.length){
+    h='<div class="empty"><div class="empty-icon">&#128197;</div><div style="font-size:14px">No players yet.</div></div>';
+  } else {
     h+='<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">';
     for(var li=0;li<appList.length;li++){
       var item=appList[li];
       var pct=ss.length?Math.round((item.count/ss.length)*100):0;
       var pos=(item.p.positions&&item.p.positions.length)?item.p.positions[0]:'—';
-      h+='<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--surface)">' +
+      var isLast=li===appList.length-1;
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;'+(isLast?'':'border-bottom:1px solid var(--surface)')+'">'+
         '<div style="font-family:var(--mono);font-size:11px;color:var(--text3);width:20px;text-align:right">'+(li+1)+'</div>'+
         '<div style="flex:1">'+
           '<div style="font-size:13px;font-weight:500">'+item.p.name+'</div>'+
@@ -902,23 +946,10 @@ function renderHistory(){
           '</div>'+
         '</div>'+
         '<span class="ptag" style="flex-shrink:0">'+pos+'</span>'+
-        '<div style="font-family:var(--mono);font-size:13px;font-weight:500;color:var(--green-dark);min-width:32px;text-align:right">'+item.count+'<span style="font-size:10px;color:var(--text3);font-weight:400"> games</span></div>'+
+        '<div style="font-family:var(--mono);font-size:13px;font-weight:500;color:var(--green-dark);min-width:40px;text-align:right">'+item.count+'<span style="font-size:10px;color:var(--text3);font-weight:400"> games</span></div>'+
       '</div>';
     }
     h+='</div>';
-  }
-
-  // Session log
-  h+='<span class="slabel">Session Log</span>';
-  if(!ss.length){h+='<div class="empty"><div class="empty-icon">&#128197;</div><div style="font-size:14px">No sessions logged yet.</div></div>';}
-  else{
-    for(var i=0;i<ss.length;i++){
-      var sess=ss[i],d=new Date(sess.date+'T12:00:00');
-      var ds=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-      var top='';
-      if(sess.goals){var pairs=Object.keys(sess.goals).map(function(id){return[id,sess.goals[id]];}).sort(function(a,b){return b[1]-a[1];});var names=[];for(var k=0;k<Math.min(3,pairs.length);k++){var gp=getPlayer(pairs[k][0]);if(gp)names.push(gp.name.split(' ')[0]+' \u00d7'+pairs[k][1]);}if(names.length)top=' \u00b7 \u26bd '+names.join(', ');}
-      h+='<div class="hscard" onclick="viewSess(\''+sess.id+'\')"><div class="between"><span class="hsdate">'+ds+'</span><span style="font-family:var(--mono);font-size:10px;color:var(--text3)">'+sess.format+'v'+sess.format+'</span></div><div class="hsscore">'+(sess.scoreA||0)+' &ndash; '+(sess.scoreB||0)+'</div><div class="hsmeta">'+(sess.attendees?sess.attendees.length:0)+' players'+top+(sess.notes?' \u00b7 '+sess.notes:'')+'</div></div>';
-    }
   }
   el.innerHTML=h;
 }
