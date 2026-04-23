@@ -140,6 +140,13 @@ body{font-family:var(--sans);background:var(--surface);color:var(--text);min-hei
 .warn{background:#fff8e1;border:1px solid #ffe082;border-radius:var(--rs);padding:10px 12px;font-size:13px;color:#7a5700;margin-bottom:14px}
 .guest-badge{background:rgba(245,200,66,.15);color:var(--accent);font-family:var(--mono);font-size:10px;font-weight:500;padding:2px 7px;border-radius:4px;letter-spacing:.05em}
 body.guest-mode .admin-only{display:none!important}
+/* date picker card */
+.date-card{background:var(--green-dark);border-radius:var(--r);padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.date-card-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:4px}
+.date-card-val{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--accent)}
+.date-inp{background:transparent;border:none;outline:none;font-family:var(--mono);font-size:15px;font-weight:500;color:var(--accent);width:auto;-webkit-appearance:none;appearance:none;cursor:pointer}
+.date-inp::-webkit-calendar-picker-indicator{filter:invert(1) sepia(1) saturate(5) hue-rotate(5deg);cursor:pointer;opacity:.7}
+.reset-pill{background:rgba(255,82,82,.15);border:1px solid rgba(255,82,82,.35);color:#ff6b6b;font-family:var(--mono);font-size:10px;font-weight:500;padding:4px 10px;border-radius:20px;letter-spacing:.05em;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -169,7 +176,7 @@ body.guest-mode .admin-only{display:none!important}
     <button class="ntab" id="t-session" onclick="go('session')"><span class="ntab-icon">&#128203;</span>Session</button>
     <button class="ntab" id="t-teams" onclick="go('teams')"><span class="ntab-icon">&#127937;</span>Teams</button>
     <button class="ntab admin-only" id="t-postgame" onclick="go('postgame')"><span class="ntab-icon">&#128202;</span>Post-Game</button>
-    <button class="ntab" id="t-history" onclick="go('history')"><span class="ntab-icon">&#128197;</span>History</button>
+    <button class="ntab" id="t-history" onclick="go('history')"><span class="ntab-icon">&#127942;</span>Appearances</button>
   </nav>
 </div>
 
@@ -188,6 +195,16 @@ body.guest-mode .admin-only{display:none!important}
 
 <!-- SESSION -->
 <div class="page" id="p-session">
+
+  <!-- DATE PICKER CARD -->
+  <div class="date-card admin-only" id="session-date-card">
+    <div>
+      <div class="date-card-label">Game Date</div>
+      <input type="date" class="date-inp" id="session-date" onchange="onSessionDateChange()">
+    </div>
+    <div id="session-reset-pill" class="reset-pill hidden">New Day — Reset</div>
+  </div>
+
   <span class="slabel">Game Format</span>
   <div class="fmtrow">
     <button class="fmtbtn on" id="fmt7" onclick="setFmt(7)"><span class="fmtnum">7v7</span>14 players</button>
@@ -275,9 +292,9 @@ body.guest-mode .admin-only{display:none!important}
   <button class="btn btn-p btn-full" onclick="saveSession()">Save Session</button>
 </div>
 
-<!-- HISTORY -->
+<!-- APPEARANCES / HISTORY -->
 <div class="page" id="p-history">
-  <span class="slabel">Appearances</span>
+  <span class="slabel">Appearances — All-time attendance</span>
   <div id="hist-list"></div>
 </div>
 </div>
@@ -429,7 +446,7 @@ body.guest-mode .admin-only{display:none!important}
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDQ_H1-4rDGuV0SJm466jDLKtgN1NQ8ZP8",
@@ -444,11 +461,18 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 const db = getDatabase(fbApp);
 
-// PASSWORD
 const PASSWORD = "pitchday2026";
 const GUEST_PASSWORD = "soccer";
-
 var isGuest = false;
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function todayStr() {
+  // Returns YYYY-MM-DD in local time
+  var d = new Date();
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  var dd = String(d.getDate()).padStart(2,'0');
+  return d.getFullYear()+'-'+mm+'-'+dd;
+}
 
 window.unlock = function() {
   var val = document.getElementById('lock-input').value;
@@ -495,13 +519,23 @@ function initApp() {
   onValue(ref(db, 'pitchday'), function(snapshot) {
     var data = snapshot.val();
     if (data) {
-      state.players = data.players || [];
-      state.sessions = data.sessions || [];
+      state.players   = data.players   || [];
+      state.sessions  = data.sessions  || [];
       state.confirmed = data.confirmed || [];
-      state.format = data.format || 7;
+      state.format    = data.format    || 7;
       state.lastTeams = data.lastTeams || null;
+      state.sessionDate = data.sessionDate || todayStr();
+    } else {
+      state.sessionDate = todayStr();
     }
     setSyncStatus('ok');
+
+    // ── AUTO-RESET CHECK ───────────────────────────────────────────────────
+    // If the stored session date is in the past compared to today, and there
+    // are confirmed players that haven't been saved yet, commit them automatically
+    // as a new session appearance entry, then reset for the new day.
+    checkDayRollover();
+
     var active = document.querySelector('.ntab.on');
     var id = active ? active.id.replace('t-','') : 'roster';
     go(id);
@@ -511,19 +545,19 @@ function initApp() {
   });
 }
 
-// Expose save function globally
 window._saveToFirebase = function() {
   saveToFirebase({
-    players: state.players,
-    sessions: state.sessions,
-    confirmed: state.confirmed,
-    format: state.format,
-    lastTeams: state.lastTeams
+    players:     state.players,
+    sessions:    state.sessions,
+    confirmed:   state.confirmed,
+    format:      state.format,
+    lastTeams:   state.lastTeams,
+    sessionDate: state.sessionDate
   });
 };
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
-window.state = { players:[], sessions:[], confirmed:[], format:7, lastTeams:null };
+window.state = { players:[], sessions:[], confirmed:[], format:7, lastTeams:null, sessionDate:'' };
 
 function saveState() { window._saveToFirebase(); }
 
@@ -542,6 +576,60 @@ function normPos(raw) {
   return null;
 }
 
+// ─── DAY-ROLLOVER LOGIC ───────────────────────────────────────────────────────
+// Called once on load. If the stored sessionDate is before today AND there
+// are confirmed players, we auto-commit them as a session so appearances update,
+// then wipe confirmed + teams for the new day.
+function checkDayRollover() {
+  var today = todayStr();
+  var stored = state.sessionDate || today;
+  if (stored < today && state.confirmed.length > 0) {
+    // Auto-commit the confirmed players from the previous session date
+    commitAppearances(stored, state.confirmed.slice());
+    // Clear for new day
+    state.confirmed = [];
+    state.lastTeams = null;
+    state.sessionDate = today;
+    saveState();
+  } else if (!state.sessionDate) {
+    state.sessionDate = today;
+  }
+}
+
+// Writes a lightweight session record so appearances count correctly.
+// Does NOT overwrite if a session for that date already exists.
+function commitAppearances(date, attendeeIds) {
+  if (!attendeeIds || !attendeeIds.length) return;
+  // Check if a session already has this date
+  var already = false;
+  for (var i = 0; i < state.sessions.length; i++) {
+    if (state.sessions[i].date === date) { already = true; break; }
+  }
+  if (already) {
+    // Merge attendees into existing session
+    for (var j = 0; j < state.sessions.length; j++) {
+      if (state.sessions[j].date === date) {
+        attendeeIds.forEach(function(aid) {
+          if (state.sessions[j].attendees.indexOf(aid) < 0)
+            state.sessions[j].attendees.push(aid);
+        });
+        break;
+      }
+    }
+  } else {
+    state.sessions.unshift({
+      id: uid(),
+      date: date,
+      scoreA: 0, scoreB: 0,
+      format: String(state.format),
+      notes: '(auto-logged)',
+      goals: {},
+      attendees: attendeeIds
+    });
+    state.sessions.sort(function(a,b){return b.date.localeCompare(a.date);});
+  }
+}
+
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
 window.go = function(id) {
   var tabs=['roster','session','teams','postgame','history'];
@@ -549,11 +637,11 @@ window.go = function(id) {
     document.getElementById('p-'+tabs[i]).classList.toggle('on',tabs[i]===id);
     document.getElementById('t-'+tabs[i]).classList.toggle('on',tabs[i]===id);
   }
-  if(id==='roster') renderRoster();
-  else if(id==='session') renderSession();
-  else if(id==='teams') renderTeams();
+  if(id==='roster')    renderRoster();
+  else if(id==='session')  renderSession();
+  else if(id==='teams')    renderTeams();
   else if(id==='postgame') renderPostGame();
-  else if(id==='history') renderHistory();
+  else if(id==='history')  renderHistory();
 };
 
 // ─── ROSTER ──────────────────────────────────────────────────────────────────
@@ -566,6 +654,7 @@ function renderRoster() {
     '<div class="sbox"><div class="snum">'+state.sessions.length+'</div><div class="slbl2">Sessions</div></div>';
   var el=document.getElementById('roster-list');
   if(!pl.length){el.innerHTML='<div class="empty"><div class="empty-icon">&#128101;</div><div style="font-size:14px">No players yet.<br>Tap + Add Player to get started.</div></div>';return;}
+  // Always alphabetical
   var sorted=pl.slice().sort(function(a,b){return a.name.localeCompare(b.name);});
   var h='';
   for(var i=0;i<sorted.length;i++){
@@ -650,6 +739,53 @@ window.deletePlayer=function(){
   saveState();closeM('m-player');renderRoster();
 };
 
+// ─── SESSION DATE ─────────────────────────────────────────────────────────────
+window.onSessionDateChange = function() {
+  var newDate = document.getElementById('session-date').value;
+  if (!newDate) return;
+
+  var today = todayStr();
+  var oldDate = state.sessionDate;
+
+  // If moving to a different date while players are confirmed,
+  // commit the old date's appearances first then reset.
+  if (newDate !== oldDate) {
+    if (state.confirmed.length > 0) {
+      if (confirm('Changing the game date will save today\'s confirmed players as appearances for ' + oldDate + ' and reset the selection. Continue?')) {
+        commitAppearances(oldDate, state.confirmed.slice());
+        state.confirmed = [];
+        state.lastTeams = null;
+      } else {
+        // Revert the picker
+        document.getElementById('session-date').value = oldDate;
+        return;
+      }
+    } else {
+      // No confirmed players — just reset teams for the new date
+      state.lastTeams = null;
+    }
+    state.sessionDate = newDate;
+    saveState();
+  }
+
+  updateResetPill();
+  renderSession();
+  // Also clear teams view so it regenerates for the new date
+  document.getElementById('teams-out').innerHTML = '<div class="empty"><div class="empty-icon">&#9917;</div><div style="font-size:14px">Confirm players in Session tab,<br>then come back to generate teams.</div></div>';
+};
+
+function updateResetPill() {
+  var pill = document.getElementById('session-reset-pill');
+  var today = todayStr();
+  var sd = state.sessionDate || today;
+  if (sd !== today) {
+    pill.textContent = 'Date: ' + sd;
+    pill.classList.remove('hidden');
+  } else {
+    pill.classList.add('hidden');
+  }
+}
+
 // ─── SESSION ─────────────────────────────────────────────────────────────────
 window.setFmt=function(n){
   state.format=n;saveState();
@@ -659,6 +795,12 @@ window.setFmt=function(n){
 };
 
 function renderSession(){
+  // Set the date picker to the stored session date
+  var sd = state.sessionDate || todayStr();
+  var sdEl = document.getElementById('session-date');
+  if (sdEl) sdEl.value = sd;
+  updateResetPill();
+
   document.getElementById('fmt7').classList.toggle('on',state.format===7);
   document.getElementById('fmt9').classList.toggle('on',state.format===9);
   var c=state.confirmed.length;
@@ -797,16 +939,12 @@ window.genTeams=function(){
   var bench=[];
   var pool=players.slice();
 
-  // If more players than needed, bench the lowest-rated first (randomly among ties)
   if(pool.length>needed){
     pool.sort(function(a,b){return parseFloat(a.rating||0)-parseFloat(b.rating||0)||(Math.random()-.5);});
     bench=pool.splice(0,pool.length-needed);
   }
 
-  // Position priority order for assigning
   var POS_ORDER=['GK','DEF','MID','FWD'];
-
-  // Sort pool by position priority then rating desc, with small random nudge for variety
   pool.sort(function(a,b){
     var aPos=a.positions&&a.positions.length?POS_ORDER.indexOf(a.positions[0]):-1;
     var bPos=b.positions&&b.positions.length?POS_ORDER.indexOf(b.positions[0]):-1;
@@ -815,14 +953,12 @@ window.genTeams=function(){
     return parseFloat(b.rating||0)-parseFloat(a.rating||0)+(Math.random()*.4-.2);
   });
 
-  // Greedy balanced split: always assign next player to the team with lower total rating
   var tA=[],tB=[],sA=0,sB=0;
   for(var k=0;k<pool.length;k++){
     if(sA<=sB){tA.push(pool[k]);sA+=parseFloat(pool[k].rating||0);}
     else{tB.push(pool[k]);sB+=parseFloat(pool[k].rating||0);}
   }
 
-  // Improvement pass: try swapping pairs to reduce rating difference
   var improved=true,passes=0;
   while(improved&&passes<20){
     improved=false;passes++;
@@ -855,7 +991,9 @@ function renderTeamsOutput(){
   var sB=t.teamB.reduce(function(s,p){return s+parseFloat(p.rating||0);},0);
   var tot=sA+sB,pct=tot?Math.round((sA/tot)*100):50;
   function rows(team){var h='';for(var i=0;i<team.length;i++){var p=team[i],pos=(p.positions&&p.positions.length)?p.positions[0]:'--';h+='<div class="trow"><span class="tpos">'+pos+'</span><span class="tpname">'+p.name+'</span><span class="tprat">'+fmtR(p.rating)+'</span></div>';}return h;}
-  var h='<div class="bbar-wrap"><div class="bbar-labels"><span>Team A &mdash; '+sA.toFixed(1)+' pts</span><span>Team B &mdash; '+sB.toFixed(1)+' pts</span></div><div class="bbar"><div class="bfill" style="width:'+pct+'%"></div></div><div style="text-align:center;font-size:11px;color:var(--text3);margin-top:4px;font-family:var(--mono)">Difference: '+Math.abs(sA-sB).toFixed(1)+' pts</div></div>'+
+  var sd = state.sessionDate || todayStr();
+  var h='<div style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--text3);margin-bottom:10px;letter-spacing:.05em">&#128197; GAME DATE: '+sd+'</div>'+
+    '<div class="bbar-wrap"><div class="bbar-labels"><span>Team A &mdash; '+sA.toFixed(1)+' pts</span><span>Team B &mdash; '+sB.toFixed(1)+' pts</span></div><div class="bbar"><div class="bfill" style="width:'+pct+'%"></div></div><div style="text-align:center;font-size:11px;color:var(--text3);margin-top:4px;font-family:var(--mono)">Difference: '+Math.abs(sA-sB).toFixed(1)+' pts</div></div>'+
     '<div class="tcard ta"><div class="thead"><span class="tname">&#11036; Team A</span><span class="trating">'+sA.toFixed(1)+' pts &middot; '+t.teamA.length+' players</span></div><div class="tplayers">'+rows(t.teamA)+'</div></div>'+
     '<div class="tcard tb"><div class="thead"><span class="tname">&#128290; Team B</span><span class="trating">'+sB.toFixed(1)+' pts &middot; '+t.teamB.length+' players</span></div><div class="tplayers">'+rows(t.teamB)+'</div></div>';
   if(t.bench&&t.bench.length)h+='<div class="bench"><span class="slabel">Bench / Rotate</span>'+rows(t.bench)+'</div>';
@@ -866,7 +1004,8 @@ function renderTeamsOutput(){
 var pgGoals={},pgAttend={};
 
 function renderPostGame(){
-  document.getElementById('pg-date').value=new Date().toISOString().split('T')[0];
+  // Pre-fill date from session date picker
+  document.getElementById('pg-date').value = state.sessionDate || todayStr();
   document.getElementById('pg-fmt').value=String(state.format);
   document.getElementById('pg-sa').value='';document.getElementById('pg-sb').value='';
   pgGoals={};pgAttend={};
@@ -904,16 +1043,44 @@ window.saveSession=function(){
   var goals={};
   Object.keys(pgGoals).forEach(function(id){if(pgGoals[id]>0)goals[id]=pgGoals[id];});
   var attendees=Object.keys(pgAttend).filter(function(id){return pgAttend[id];});
-  state.sessions.unshift({id:uid(),date:date,scoreA:parseInt(document.getElementById('pg-sa').value)||0,scoreB:parseInt(document.getElementById('pg-sb').value)||0,format:document.getElementById('pg-fmt').value,notes:document.getElementById('pg-notes').value.trim(),goals:goals,attendees:attendees});
-  state.confirmed=[];state.lastTeams=null;saveState();
-  document.getElementById('pg-notes').value='';window.go('history');
+
+  // Check if a session with this date already exists; update it rather than duplicate
+  var existing = null;
+  for (var si = 0; si < state.sessions.length; si++) {
+    if (state.sessions[si].date === date) { existing = state.sessions[si]; break; }
+  }
+  if (existing) {
+    existing.scoreA = parseInt(document.getElementById('pg-sa').value)||0;
+    existing.scoreB = parseInt(document.getElementById('pg-sb').value)||0;
+    existing.format = document.getElementById('pg-fmt').value;
+    existing.notes  = document.getElementById('pg-notes').value.trim();
+    existing.goals  = goals;
+    // Merge attendees
+    attendees.forEach(function(aid){ if(existing.attendees.indexOf(aid)<0) existing.attendees.push(aid); });
+  } else {
+    state.sessions.unshift({id:uid(),date:date,
+      scoreA:parseInt(document.getElementById('pg-sa').value)||0,
+      scoreB:parseInt(document.getElementById('pg-sb').value)||0,
+      format:document.getElementById('pg-fmt').value,
+      notes:document.getElementById('pg-notes').value.trim(),
+      goals:goals,attendees:attendees});
+    state.sessions.sort(function(a,b){return b.date.localeCompare(a.date);});
+  }
+
+  // Reset confirmed + teams for the next session
+  state.confirmed=[];
+  state.lastTeams=null;
+  state.sessionDate = todayStr(); // reset to today after saving
+  saveState();
+  document.getElementById('pg-notes').value='';
+  window.go('history');
 };
 
-// ─── HISTORY ─────────────────────────────────────────────────────────────────
+// ─── APPEARANCES / HISTORY ────────────────────────────────────────────────────
 function renderHistory(){
   var ss=state.sessions;
 
-  // Build appearances map
+  // Build appearances map from sessions
   var appMap={};
   for(var si=0;si<ss.length;si++){
     var atts=ss[si].attendees||[];
@@ -921,7 +1088,8 @@ function renderHistory(){
       appMap[atts[ai]]=(appMap[atts[ai]]||0)+1;
     }
   }
-  // Sort players by appearances desc
+
+  // Sort players by appearances desc, then alphabetically
   var appList=state.players.map(function(p){return{p:p,count:appMap[p.id]||0};});
   appList.sort(function(a,b){return b.count-a.count||a.p.name.localeCompare(b.p.name);});
 
@@ -929,27 +1097,42 @@ function renderHistory(){
   var h='';
 
   if(!appList.length){
-    h='<div class="empty"><div class="empty-icon">&#128197;</div><div style="font-size:14px">No players yet.</div></div>';
+    h='<div class="empty"><div class="empty-icon">&#127942;</div><div style="font-size:14px">No players yet.</div></div>';
   } else {
+    var maxCount = appList[0].count || 1;
     h+='<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">';
     for(var li=0;li<appList.length;li++){
       var item=appList[li];
-      var pct=ss.length?Math.round((item.count/ss.length)*100):0;
+      var pct=Math.round((item.count/maxCount)*100);
       var pos=(item.p.positions&&item.p.positions.length)?item.p.positions[0]:'—';
       var isLast=li===appList.length-1;
-      h+='<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;'+(isLast?'':'border-bottom:1px solid var(--surface)')+'">'+
-        '<div style="font-family:var(--mono);font-size:11px;color:var(--text3);width:20px;text-align:right">'+(li+1)+'</div>'+
-        '<div style="flex:1">'+
-          '<div style="font-size:13px;font-weight:500">'+item.p.name+'</div>'+
-          '<div style="height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden">'+
-            '<div style="height:100%;width:'+pct+'%;background:var(--green-mid);border-radius:2px"></div>'+
+
+      // Medal emoji for top 3
+      var medal='';
+      if(li===0&&item.count>0) medal='&#127947;'; // gold
+      else if(li===1&&item.count>0) medal='&#129352;'; // silver
+      else if(li===2&&item.count>0) medal='&#129353;'; // bronze
+
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;'+(isLast?'':'border-bottom:1px solid var(--surface)')+'">'+
+        '<div style="font-family:var(--mono);font-size:12px;color:var(--text3);width:22px;text-align:right;flex-shrink:0">'+(medal||'#'+(li+1))+'</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:500;margin-bottom:3px">'+item.p.name+'</div>'+
+          '<div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">'+
+            '<div style="height:100%;width:'+pct+'%;background:'+(li===0?'var(--accent)':li===1?'#bbb':li===2?'#cd853f':'var(--green-mid)')+';border-radius:2px;transition:width .4s"></div>'+
           '</div>'+
         '</div>'+
         '<span class="ptag" style="flex-shrink:0">'+pos+'</span>'+
-        '<div style="font-family:var(--mono);font-size:13px;font-weight:500;color:var(--green-dark);min-width:40px;text-align:right">'+item.count+'<span style="font-size:10px;color:var(--text3);font-weight:400"> games</span></div>'+
+        '<div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green-dark);min-width:44px;text-align:right">'+item.count+
+          '<span style="font-size:10px;color:var(--text3);font-weight:400"> game'+(item.count===1?'':'s')+'</span>'+
+        '</div>'+
       '</div>';
     }
     h+='</div>';
+
+    // Summary footer
+    h+='<div style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--text3);padding-bottom:16px">'+
+      ss.length+' session'+(ss.length===1?'':'s')+' logged &middot; '+appList.length+' players tracked'+
+    '</div>';
   }
   el.innerHTML=h;
 }
