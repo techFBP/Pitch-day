@@ -916,7 +916,23 @@ function findCandidates(token) {
 
 window.processPasteList=function(){
   var raw   = document.getElementById('paste-input').value;
-  var names = raw.split(/[\n,]+/).map(function(n){ return n.trim(); }).filter(function(n){ return n.length > 0; });
+  function cleanToken(s) {
+    var out = '';
+    for (var ci=0; ci<s.length; ci++) {
+      var code = s.charCodeAt(ci);
+      // Skip invisible/control unicode: C0 controls, DEL, C1/nbsp, zero-width family, word-joiners, BOM
+      if (code <= 0x1F) continue;
+      if (code >= 0x7F && code <= 0x00A0) continue;
+      if (code >= 0x200B && code <= 0x206F) continue;
+      if (code === 0xFEFF) continue;
+      out += s[ci];
+    }
+    out = out.trim();
+    // Strip trailing parenthetical annotations like (friend), (C), (sub)
+    out = out.replace(/ *[(][^)]*[)] *$/, '').trim();
+    return out;
+  }
+  var names = raw.split(/[\n,]+/).map(cleanToken).filter(function(n){ return n.length > 0; });
   if (!names.length) return;
 
   pasteQueue = [];
