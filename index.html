@@ -847,180 +847,202 @@ window.togglePasteBox=function(){
   box.style.display=box.style.display==='none'?'block':'none';
 };
 
-// Queue items can be:
-//   { type:'unknown', name }            → prompt to add new player
-//   { type:'ambiguous', name, matches } → prompt to pick one of several roster players
-var pasteQueue=[], pasteCurrent=null;
-var pasteAutoConfirmed=0; // running count of silently auto-matched players
+// Queue items: { type:'unknown', name } or { type:'ambiguous', name, matches[] }
+var pasteQueue=[], pasteCurrent=null, pasteAutoConfirmed=0;
 
-// Extract nickname from a player name — text inside quotes or parentheses.
+// Extract nickname from quotes or parens: 'Asaf "Kike"' -> 'kike'
 function extractNickname(fullName) {
-  var m = fullName.match(/["'"\u201c\u201d\u2018\u2019(]\s*([^"'"\u201c\u201d\u2018\u2019)]+)\s*["'"\u201c\u201d\u2018\u2019)]/);
+  var m = fullName.match(/[\u0022\u201c\u201d(]\s*([^\u0022\u201c\u201d()]+)\s*[\u0022\u201c\u201d)]/);
   return m ? m[1].trim().toLowerCase() : null;
 }
 
-// Return all roster players whose name or nickname match the search token.
-// Match tiers (highest → lowest):
-//   1. Exact full-name match (case-insensitive)
-//   2. Exact nickname match
-//   3. Any word in the full name starts with the token (prefix)
-//   4. Full name contains the token as a substring
+// Get plain lowercase words from a name, stripping quotes/parens
+function nameWords(fullName) {
+  return fullName.toLowerCase()
+    .replace(/[\u0022\u201c\u201d\u2018\u2019()]/g, ' ')
+    .split(/\s+/)
+    .filter(function(w){ return w.length > 0; });
+}
+
+// Find roster players matching a typed token.
+// Returns { tier, list[] } where tier indicates match quality:
+//   'exact'     - token equals full name
+//   'nick'      - token equals nickname in quotes/parens
+//   'wordExact' - token equals one of the name's words exactly
+//   'prefix'    - token is a prefix of one of the words (min 2 chars)
+//   'sub'       - name contains token as substring (min 2 chars)
+//   'none'      - no match
 function findCandidates(token) {
   var t = token.trim().toLowerCase();
-  var exact=[], nickMatch=[], prefix=[], substr=[];
+  if (!t) return { tier:'none', list:[] };
 
-  state.players.forEach(function(p) {
-    var full = p.name.toLowerCase();
-    var nick = extractNickname(p.name);
-    var words = full.replace(/["'"\u201c\u201d\u2018\u2019()]/g,' ').split(/\s+/).filter(Boolean);
+  var exact=[], nick=[], wordExact=[], wordPrefix=[], sub=[];
+
+  for (var i=0; i<state.players.length; i++) {
+    var p     = state.players[i];
+    var full  = p.name.toLowerCase();
+    var alias = extractNickname(p.name);
+    var words = nameWords(p.name);
 
     if (full === t) {
       exact.push(p);
-    } else if (nick && nick === t) {
-      nickMatch.push(p);
-    } else if (words.some(function(w){ return w === t || w.indexOf(t) === 0; })) {
-      prefix.push(p);
-    } else if (full.replace(/["'"\u201c\u201d\u2018\u2019()]/g,' ').indexOf(t) >= 0) {
-      substr.push(p);
+    } else if (alias !== null && alias === t) {
+      nick.push(p);
+    } else {
+      var hasWordExact = false;
+      var hasPrefix    = false;
+      for (var w=0; w<words.length; w++) {
+        if (words[w] === t)                              hasWordExact = true;
+        if (t.length >= 2 && words[w].indexOf(t) === 0) hasPrefix    = true;
+      }
+      var cleanFull = full.replace(/[\u0022\u201c\u201d\u2018\u2019()]/g,' ');
+      if (hasWordExact) {
+        wordExact.push(p);
+      } else if (hasPrefix) {
+        wordPrefix.push(p);
+      } else if (t.length >= 2 && cleanFull.indexOf(t) >= 0) {
+        sub.push(p);
+      }
     }
-  });
+  }
 
-  // Return the highest tier that has results
-  if (exact.length)     return { tier:'exact',    list: exact };
-  if (nickMatch.length) return { tier:'nick',     list: nickMatch };
-  if (prefix.length)    return { tier:'prefix',   list: prefix };
-  if (substr.length)    return { tier:'substr',   list: substr };
-  return { tier:'none', list: [] };
+  if (exact.length)      return { tier:'exact',     list: exact };
+  if (nick.length)       return { tier:'nick',      list: nick };
+  if (wordExact.length)  return { tier:'wordExact', list: wordExact };
+  if (wordPrefix.length) return { tier:'prefix',   list: wordPrefix };
+  if (sub.length)        return { tier:'sub',      list: sub };
+  return { tier:'none', list:[] };
 }
 
 window.processPasteList=function(){
-  var raw=document.getElementById('paste-input').value;
-  var names=raw.split(/[\n,]+/).map(function(n){return n.trim();}).filter(function(n){return n.length>0;});
-  if(!names.length) return;
+  var raw   = document.getElementById('paste-input').value;
+  var names = raw.split(/[\n,]+/).map(function(n){ return n.trim(); }).filter(function(n){ return n.length > 0; });
+  if (!names.length) return;
 
-  pasteQueue=[];
-  pasteAutoConfirmed=0;
+  pasteQueue = [];
+  pasteAutoConfirmed = 0;
 
-  names.forEach(function(token){
-    var res = findCandidates(token);
-    if(res.list.length === 1){
-      // Unambiguous match — auto-confirm silently
-      var id = res.list[0].id;
-      if(state.confirmed.indexOf(id)<0) state.confirmed.push(id);
+  for (var i=0; i<names.length; i++) {
+    var token = names[i];
+    var res   = findCandidates(token);
+    if (res.list.length === 1) {
+      // Single clear match - auto confirm
+      var pid = res.list[0].id;
+      if (state.confirmed.indexOf(pid) < 0) state.confirmed.push(pid);
       pasteAutoConfirmed++;
-    } else if(res.list.length > 1){
-      // Multiple matches → needs disambiguation
+    } else if (res.list.length > 1) {
+      // Multiple matches - need disambiguation
       pasteQueue.push({ type:'ambiguous', name:token, matches:res.list });
     } else {
-      // No match → prompt to add new player
+      // No match - prompt to add new
       pasteQueue.push({ type:'unknown', name:token });
     }
-  });
+  }
 
-  saveState(); renderSession();
-  var resultEl=document.getElementById('paste-result');
-  resultEl.style.display='block';
-  resultEl.textContent='Auto-confirmed '+pasteAutoConfirmed+' player'+(pasteAutoConfirmed!==1?'s':'')+'.'+
-    (pasteQueue.length?' Resolving '+pasteQueue.length+' more...':'');
+  saveState();
+  renderSession();
 
-  if(pasteQueue.length>0) processNextInQueue();
-  else document.getElementById('paste-input').value='';
+  var resultEl = document.getElementById('paste-result');
+  resultEl.style.display = 'block';
+  if (pasteQueue.length > 0) {
+    resultEl.textContent = 'Auto-confirmed ' + pasteAutoConfirmed + (pasteAutoConfirmed !== 1 ? ' players' : ' player') + '. Resolving ' + pasteQueue.length + ' more...';
+    processNextInQueue();
+  } else {
+    resultEl.textContent = 'Done! Confirmed ' + state.confirmed.length + (state.confirmed.length !== 1 ? ' players' : ' player') + '.';
+    document.getElementById('paste-input').value = '';
+  }
 };
 
-function processNextInQueue(){
-  if(pasteQueue.length===0){
-    document.getElementById('paste-input').value='';
-    // Refresh result label with final count
-    var resultEl=document.getElementById('paste-result');
-    resultEl.style.display='block';
-    resultEl.textContent='Done! Confirmed '+state.confirmed.length+' player'+(state.confirmed.length!==1?'s':\'\')+'.' ;
+function processNextInQueue() {
+  if (pasteQueue.length === 0) {
+    document.getElementById('paste-input').value = '';
+    var resultEl = document.getElementById('paste-result');
+    resultEl.style.display = 'block';
+    resultEl.textContent = 'Done! Confirmed ' + state.confirmed.length + (state.confirmed.length !== 1 ? ' players' : ' player') + '.';
     return;
   }
-  var item=pasteQueue.shift();
-  pasteCurrent=item.name;
-  var remaining=pasteQueue.length;
+  var item = pasteQueue.shift();
+  pasteCurrent = item.name;
+  var remaining = pasteQueue.length;
 
-  if(item.type==='ambiguous'){
-    // Open disambiguation modal
+  if (item.type === 'ambiguous') {
     openDisambigModal(item.name, item.matches, remaining);
   } else {
-    // Open new-player modal
-    processNextUnknown_item(item.name, remaining);
+    openUnknownModal(item.name, remaining);
   }
 }
 
 // ── Disambiguation: multiple roster players match ─────────────────────────────
-function openDisambigModal(token, matches, remaining){
-  var h='<div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">'+
-    'Found <strong>'+matches.length+' players</strong> matching <strong>"'+token+'"</strong>. '+
-    'Tap the correct one, or skip / add as new.'+
-    (remaining>0?'<br><span style="color:var(--text3);font-size:12px">('+remaining+' more name'+(remaining!==1?'s':'')+' after this)</span>':'')+'</div>';
+function openDisambigModal(token, matches, remaining) {
+  var h = '<div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">'
+        + 'Found <strong>' + matches.length + ' players</strong> matching <strong>&ldquo;' + token + '&rdquo;</strong>.<br>'
+        + 'Tap the right one, or skip / add as new.'
+        + (remaining > 0 ? '<br><span style="color:var(--text3);font-size:12px">(' + remaining + ' more name' + (remaining !== 1 ? 's' : '') + ' after this)</span>' : '')
+        + '</div>';
 
-  h+='<div id="disambig-list" style="margin-bottom:14px">';
-  matches.forEach(function(p){
-    var pos=(p.positions&&p.positions.length)?p.positions.join(', '):'Any';
-    var nick=extractNickname(p.name);
-    h+='<div onclick="confirmDisambig(\''+p.id+'\')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:8px;cursor:pointer;transition:border-color .15s;background:var(--white);" '+
-      'onmouseover="this.style.borderColor=\'var(--green)\'" onmouseout="this.style.borderColor=\'var(--border)\'">'+
-      '<div class="avatar">'+initials(p.name)+'</div>'+
-      '<div style="flex:1">'+
-        '<div style="font-weight:600;font-size:14px">'+p.name+'</div>'+
-        '<div style="font-size:12px;color:var(--text3)">'+pos+' &middot; '+fmtR(p.rating)+'/5'+(nick?' &middot; <span style="font-family:var(--mono);color:var(--green)">"'+nick+'"</span>':'')+'</div>'+
-      '</div>'+
-      '<div style="font-size:18px;color:var(--green)">&#10003;</div>'+
-    '</div>';
-  });
-  h+='</div>';
+  h += '<div style="margin-bottom:14px">';
+  for (var i=0; i<matches.length; i++) {
+    var p    = matches[i];
+    var pos  = (p.positions && p.positions.length) ? p.positions.join(', ') : 'Any';
+    var nick = extractNickname(p.name);
+    h += '<div onclick="confirmDisambig(\'' + p.id + '\')" '
+       + 'style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1.5px solid var(--border);'
+       + 'border-radius:var(--r);margin-bottom:8px;cursor:pointer;background:var(--white);" '
+       + 'onmouseover="this.style.borderColor=\'var(--green)\'" '
+       + 'onmouseout="this.style.borderColor=\'var(--border)\'">'
+       + '<div class="avatar">' + initials(p.name) + '</div>'
+       + '<div style="flex:1">'
+       +   '<div style="font-weight:600;font-size:14px">' + p.name + '</div>'
+       +   '<div style="font-size:12px;color:var(--text3)">' + pos + ' &middot; ' + fmtR(p.rating) + '/5'
+       +   (nick ? ' &middot; <span style="font-family:var(--mono);color:var(--green)">&ldquo;' + nick + '&rdquo;</span>' : '')
+       +   '</div>'
+       + '</div>'
+       + '<div style="font-size:20px;color:var(--green)">&#10003;</div>'
+       + '</div>';
+  }
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px">'
+     + '<button class="btn btn-g" style="flex:1" onclick="skipDisambig()">Skip</button>'
+     + '<button class="btn btn-d" style="flex:1" onclick="addNewFromDisambig()">Add as New</button>'
+     + '</div>';
 
-  h+='<div style="display:flex;gap:8px">'+
-    '<button class="btn btn-g" style="flex:1" onclick="skipDisambig()">Skip</button>'+
-    '<button class="btn btn-d" style="flex:1" onclick="addNewFromDisambig()">Add as New</button>'+
-  '</div>';
-
-  document.getElementById('m-disambig-body').innerHTML=h;
+  document.getElementById('m-disambig-body').innerHTML = h;
   openM('m-disambig');
 }
 
-window.confirmDisambig=function(id){
-  if(state.confirmed.indexOf(id)<0) state.confirmed.push(id);
-  saveState(); renderSession();
+window.confirmDisambig = function(id) {
+  if (state.confirmed.indexOf(id) < 0) state.confirmed.push(id);
+  saveState();
+  renderSession();
   closeM('m-disambig');
   setTimeout(processNextInQueue, 300);
 };
 
-window.skipDisambig=function(){
+window.skipDisambig = function() {
   closeM('m-disambig');
   setTimeout(processNextInQueue, 300);
 };
 
-window.addNewFromDisambig=function(){
+window.addNewFromDisambig = function() {
   closeM('m-disambig');
-  setTimeout(function(){
-    // Push this back as an unknown so the new-player modal fires
+  setTimeout(function() {
     pasteQueue.unshift({ type:'unknown', name:pasteCurrent });
     processNextInQueue();
   }, 300);
 };
 
-// ── Unknown player flow ───────────────────────────────────────────────────────
-function processNextUnknown_item(name, remaining){
-  document.getElementById('np-name').value=name;
-  document.getElementById('np-rating').value=3;
-  document.getElementById('np-rat-val').textContent='3.0';
-  POSITIONS.forEach(function(pos){setNpPosState(pos,false);});
-  document.getElementById('np-unknown-names').innerHTML=
-    '<strong style="color:var(--red)">&#9888; "'+name+'"</strong> not found in roster.<br>Add as a new player or skip.'+
-    (remaining>0?'<br><span style="color:var(--text3)">('+remaining+' more after this)</span>':'');
+// ── Unknown player: not found in roster ───────────────────────────────────────
+function openUnknownModal(name, remaining) {
+  document.getElementById('np-name').value = name;
+  document.getElementById('np-rating').value = 3;
+  document.getElementById('np-rat-val').textContent = '3.0';
+  POSITIONS.forEach(function(pos){ setNpPosState(pos, false); });
+  document.getElementById('np-unknown-names').innerHTML =
+    '<strong style="color:var(--red)">&#9888; &ldquo;' + name + '&rdquo;</strong> was not found in the roster.<br>Add as a new player or skip.'
+    + (remaining > 0 ? '<br><span style="color:var(--text3);font-size:12px">(' + remaining + ' more after this)</span>' : '');
   openM('m-newplayer');
 }
 
-// Legacy alias (called by modal buttons)
-function processNextUnknown(){
-  if(pasteQueue.length===0){document.getElementById('paste-input').value='';return;}
-  var item=pasteQueue.shift();
-  pasteCurrent=item.name;
-  processNextUnknown_item(item.name, pasteQueue.length);
-}
 
 function setNpPosState(pos,on){
   var span=document.getElementById('np-'+pos);
