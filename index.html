@@ -177,34 +177,20 @@ body.guest-mode .guest-only{display:flex!important}
 <!-- NO TEAM SCREEN -->
 <div id="no-team-screen">
   <div class="lock-logo">&#9917;</div>
-  <div class="lock-title" style="font-family:var(--mono);font-size:22px;font-weight:500;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">PITCH DAY</div>
-  <div style="font-size:14px;color:rgba(255,255,255,.6);line-height:1.8;max-width:280px">No team found.<br>Ask your admin for your team link.<br><br><span style="color:rgba(255,255,255,.3);font-size:12px;font-family:'DM Mono',monospace">e.g. pitchday.app?team=yourteam</span></div>
+  <div class="lock-title">PITCH DAY</div>
+  <div style="font-size:14px;color:rgba(255,255,255,.6);line-height:1.8;max-width:280px;text-align:center">No team found.<br>Ask your admin for your team link.<br><br><span style="color:rgba(255,255,255,.3);font-size:12px;font-family:'DM Mono',monospace">e.g. pitchday.app?team=yourteam</span></div>
 </div>
 
 <!-- ADMIN SCREEN -->
 <div id="admin-screen">
-  <div class="admin-hdr">
-    <div class="admin-hdr-title">&#9917; Pitch Day &mdash; Admin Panel</div>
-  </div>
+  <div class="admin-hdr"><div class="admin-hdr-title">&#9917; Pitch Day &mdash; Admin Panel</div></div>
   <div class="admin-body">
     <span class="slabel" style="margin-top:8px;display:block">Create New Team</span>
     <div class="card mb16">
-      <div class="fg">
-        <label class="fl">Team ID <span style="font-weight:400;color:var(--text3)">(no spaces, letters only)</span></label>
-        <input type="text" class="fi" id="adm-teamid" placeholder="e.g. redsharks">
-      </div>
-      <div class="fg">
-        <label class="fl">Team Name</label>
-        <input type="text" class="fi" id="adm-teamname" placeholder="e.g. Red Sharks FC">
-      </div>
-      <div class="fg">
-        <label class="fl">Admin Password</label>
-        <input type="text" class="fi" id="adm-adminpw" placeholder="admin password">
-      </div>
-      <div class="fg">
-        <label class="fl">Guest Password</label>
-        <input type="text" class="fi" id="adm-guestpw" placeholder="guest password">
-      </div>
+      <div class="fg"><label class="fl">Team ID <span style="font-weight:400;color:var(--text3)">(no spaces)</span></label><input type="text" class="fi" id="adm-teamid" placeholder="e.g. redsharks"></div>
+      <div class="fg"><label class="fl">Team Name</label><input type="text" class="fi" id="adm-teamname" placeholder="e.g. Red Sharks FC"></div>
+      <div class="fg"><label class="fl">Admin Password</label><input type="text" class="fi" id="adm-adminpw" placeholder="admin password"></div>
+      <div class="fg"><label class="fl">Guest Password</label><input type="text" class="fi" id="adm-guestpw" placeholder="guest password"></div>
       <button class="btn btn-p btn-full" onclick="adminCreateTeam()">Create Team</button>
       <div id="adm-result" style="margin-top:12px;font-size:13px;line-height:1.7;display:none"></div>
     </div>
@@ -666,20 +652,18 @@ body.guest-mode .guest-only{display:flex!important}
 // ─── STORAGE: localStorage primary, Firebase optional sync ───────────────────
 // Works from file://, offline, any browser. Firebase syncs in background if available.
 
-// ─── TEAM ROUTING ─────────────────────────────────────────────────────────────
-var teamId = new URLSearchParams(window.location.search).get('team') || '';
-var FIREBASE_BASE = 'https://pitch-day-1dc17-default-rtdb.firebaseio.com';
-var FIREBASE_KEY  = 'AIzaSyDQ_H1-4rDGuV0SJm466jDLKtgN1NQ8ZP8';
-var FIREBASE_URL  = FIREBASE_BASE + '/teams/' + teamId + '/data.json';
-var FIREBASE_CFG  = FIREBASE_BASE + '/teams/' + teamId + '/config.json';
-var FIREBASE_ALL  = FIREBASE_BASE + '/teams.json';
-var LS_KEY = 'pitchday_' + (teamId || 'default');
+var FIREBASE_BASE  = 'https://pitch-day-1dc17-default-rtdb.firebaseio.com';
+var teamId         = new URLSearchParams(window.location.search).get('team') || '';
+var FIREBASE_URL   = FIREBASE_BASE + '/teams/' + teamId + '/data.json';
+var FIREBASE_CFG   = FIREBASE_BASE + '/teams/' + teamId + '/config.json';
+var FIREBASE_ALL   = FIREBASE_BASE + '/teams.json';
+var LS_KEY         = 'pitchday_' + (teamId || 'default');
 
-var PASSWORD       = 'pitchday2026'; // fallback, overwritten by Firebase config
+var PASSWORD       = 'pitchday2026';
 var GUEST_PASSWORD = 'soccer';
-var isGuest = false;
+var isGuest        = false;
 
-// Handle routing on page load
+// ─── TEAM ROUTING ─────────────────────────────────────────────────────────────
 (function() {
   if (teamId === 'admin') {
     document.getElementById('no-team-screen').classList.add('hidden');
@@ -690,27 +674,25 @@ var isGuest = false;
   }
   if (!teamId) {
     document.getElementById('lock-screen').classList.add('hidden');
-    return; // no-team-screen stays visible
+    return;
   }
-  // Valid team — load config to get team name + passwords
   document.getElementById('no-team-screen').classList.add('hidden');
-  try {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', FIREBASE_CFG + '?auth=' + FIREBASE_KEY, true);
-    xhr.onload = function() {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          var cfg = JSON.parse(xhr.responseText);
-          if (cfg) {
-            if (cfg.adminPassword) PASSWORD = cfg.adminPassword;
-            if (cfg.guestPassword) GUEST_PASSWORD = cfg.guestPassword;
-            if (cfg.teamName) document.querySelector('.lock-sub').textContent = cfg.teamName;
-          }
-        } catch(e) {}
-      }
-    };
-    xhr.send();
-  } catch(e) {}
+  // Load team config to get name + passwords
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', FIREBASE_CFG, true);
+  xhr.onload = function() {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      try {
+        var cfg = JSON.parse(xhr.responseText);
+        if (cfg) {
+          if (cfg.adminPassword) PASSWORD = cfg.adminPassword;
+          if (cfg.guestPassword) GUEST_PASSWORD = cfg.guestPassword;
+          if (cfg.teamName) document.querySelector('.lock-sub').textContent = cfg.teamName;
+        }
+      } catch(e) {}
+    }
+  };
+  xhr.send();
 })();
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -789,7 +771,7 @@ function doFbSync() {
       fund:        state.fund
     });
     var xhr = new XMLHttpRequest();
-    xhr.open('PUT', FIREBASE_URL+'?auth='+FIREBASE_KEY, true);
+    xhr.open('PUT', FIREBASE_URL, true);
     xhr.setRequestHeader('Content-Type','application/json');
     xhr.onload = function(){ if(xhr.status>=200&&xhr.status<300){ setSyncStatus('ok'); } else { setSyncStatus('err'); } };
     xhr.onerror = function(){ setSyncStatus('err'); };
@@ -801,7 +783,7 @@ function doFbSync() {
 function fetchFromFirebase(cb) {
   try {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', FIREBASE_URL+'?auth='+FIREBASE_KEY, true);
+    xhr.open('GET', FIREBASE_URL, true);
     xhr.onload = function() {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
@@ -2011,81 +1993,68 @@ window.adminCreateTeam = function() {
   var apw   = document.getElementById('adm-adminpw').value.trim();
   var gpw   = document.getElementById('adm-guestpw').value.trim();
   var res   = document.getElementById('adm-result');
-  if (!tid || !tname || !apw || !gpw) {
-    res.style.display='block'; res.style.color='var(--red)'; res.textContent='Fill in all fields.'; return;
-  }
-  // Save config
-  var cfg = JSON.stringify({ teamName:tname, adminPassword:apw, guestPassword:gpw, createdAt:new Date().toISOString() });
-  var xhr1 = new XMLHttpRequest();
-  xhr1.open('PUT', FIREBASE_BASE+'/teams/'+tid+'/config.json?auth='+FIREBASE_KEY, true);
-  xhr1.setRequestHeader('Content-Type','application/json');
-  xhr1.onload = function() {
-    if (xhr1.status >= 200 && xhr1.status < 300) {
-      // Initialise empty data node
-      var xhr2 = new XMLHttpRequest();
-      xhr2.open('PUT', FIREBASE_BASE+'/teams/'+tid+'/data.json?auth='+FIREBASE_KEY, true);
+  if (!tid||!tname||!apw||!gpw){ res.style.display='block';res.style.color='var(--red)';res.textContent='Fill in all fields.';return; }
+  var xhr = new XMLHttpRequest();
+  xhr.open('PUT', FIREBASE_BASE+'/teams/'+tid+'/config.json', true);
+  xhr.setRequestHeader('Content-Type','application/json');
+  xhr.onload = function() {
+    if (xhr.status>=200&&xhr.status<300) {
+      var xhr2=new XMLHttpRequest();
+      xhr2.open('PUT', FIREBASE_BASE+'/teams/'+tid+'/data.json', true);
       xhr2.setRequestHeader('Content-Type','application/json');
-      xhr2.send(JSON.stringify({ players:[], sessions:[], confirmed:[], format:7, lastTeams:null, sessionDate:'', fund:{ contributions:[], expenses:[] } }));
-      var link = window.location.origin + window.location.pathname + '?team=' + tid;
-      res.style.display='block'; res.style.color='var(--green)';
-      res.innerHTML = '✓ Team created!<br><strong>Link:</strong> <a href="'+link+'" target="_blank" style="color:var(--green);word-break:break-all">'+link+'</a>';
+      xhr2.send(JSON.stringify({players:[],sessions:[],confirmed:[],format:7,lastTeams:null,sessionDate:'',fund:{contributions:[],expenses:[]}}));
+      var link=window.location.origin+window.location.pathname+'?team='+tid;
+      res.style.display='block';res.style.color='var(--green)';
+      res.innerHTML='&#10003; Team created!<br><strong>Link:</strong> <a href="'+link+'" target="_blank" style="color:var(--green);word-break:break-all">'+link+'</a>';
       document.getElementById('adm-teamid').value='';
       document.getElementById('adm-teamname').value='';
       document.getElementById('adm-adminpw').value='';
       document.getElementById('adm-guestpw').value='';
       loadAdminTeams();
-    } else {
-      res.style.display='block'; res.style.color='var(--red)'; res.textContent='Firebase error: '+xhr1.status;
-    }
+    } else { res.style.display='block';res.style.color='var(--red)';res.textContent='Firebase error: '+xhr.status; }
   };
-  xhr1.onerror = function(){ res.style.display='block'; res.style.color='var(--red)'; res.textContent='Network error.'; };
-  xhr1.send(cfg);
+  xhr.onerror=function(){ res.style.display='block';res.style.color='var(--red)';res.textContent='Network error.'; };
+  xhr.send(JSON.stringify({teamName:tname,adminPassword:apw,guestPassword:gpw,createdAt:new Date().toISOString()}));
 };
 
 function loadAdminTeams() {
-  var el = document.getElementById('adm-teams-list');
-  if (!el) return;
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', FIREBASE_ALL+'?auth='+FIREBASE_KEY+'&shallow=true', true);
-  xhr.onload = function() {
-    if (xhr.status >= 200 && xhr.status < 300) {
-      try {
-        var teams = JSON.parse(xhr.responseText);
-        if (!teams) { el.innerHTML='<div style="color:var(--text3)">No teams yet.</div>'; return; }
-        var ids = Object.keys(teams).filter(function(k){ return k !== 'admin'; });
-        if (!ids.length) { el.innerHTML='<div style="color:var(--text3)">No teams yet.</div>'; return; }
-        // Load each team config
-        var loaded=0, configs={};
-        ids.forEach(function(tid) {
-          var x = new XMLHttpRequest();
-          x.open('GET', FIREBASE_BASE+'/teams/'+tid+'/config.json?auth='+FIREBASE_KEY, true);
-          x.onload = function() {
-            try { configs[tid] = JSON.parse(x.responseText) || {}; } catch(e) { configs[tid]={}; }
-            if (++loaded === ids.length) renderAdminList(ids, configs);
-          };
-          x.onerror = function(){ configs[tid]={}; if(++loaded===ids.length) renderAdminList(ids,configs); };
+  var el=document.getElementById('adm-teams-list'); if(!el)return;
+  var xhr=new XMLHttpRequest();
+  xhr.open('GET', FIREBASE_ALL+'?shallow=true', true);
+  xhr.onload=function() {
+    if(xhr.status>=200&&xhr.status<300){
+      try{
+        var teams=JSON.parse(xhr.responseText);
+        if(!teams){el.innerHTML='<div style="color:var(--text3)">No teams yet.</div>';return;}
+        var ids=Object.keys(teams).filter(function(k){return k!=='admin';});
+        if(!ids.length){el.innerHTML='<div style="color:var(--text3)">No teams yet.</div>';return;}
+        var loaded=0,configs={};
+        ids.forEach(function(tid){
+          var x=new XMLHttpRequest();
+          x.open('GET',FIREBASE_BASE+'/teams/'+tid+'/config.json',true);
+          x.onload=function(){try{configs[tid]=JSON.parse(x.responseText)||{};}catch(e){configs[tid]={};}if(++loaded===ids.length)renderAdminList(ids,configs);};
+          x.onerror=function(){configs[tid]={};if(++loaded===ids.length)renderAdminList(ids,configs);};
           x.send();
         });
-      } catch(e){ el.innerHTML='<div style="color:var(--red)">Error loading teams.</div>'; }
+      }catch(e){el.innerHTML='<div style="color:var(--red)">Error loading.</div>';}
     }
   };
   xhr.send();
 }
 
-function renderAdminList(ids, configs) {
-  var el = document.getElementById('adm-teams-list');
-  var h = '';
-  ids.forEach(function(tid, i) {
-    var cfg  = configs[tid] || {};
-    var link = window.location.origin + window.location.pathname + '?team=' + tid;
-    var isLast = i === ids.length - 1;
-    h += '<div style="padding:10px 0;'+(isLast?'':'border-bottom:1px solid var(--surface)')+'">'+
+function renderAdminList(ids,configs){
+  var el=document.getElementById('adm-teams-list');
+  var h='';
+  ids.forEach(function(tid,i){
+    var cfg=configs[tid]||{};
+    var link=window.location.origin+window.location.pathname+'?team='+tid;
+    h+='<div style="padding:10px 0;'+(i<ids.length-1?'border-bottom:1px solid var(--surface)':'')+'">'+
       '<div style="font-weight:500;font-size:14px">'+(cfg.teamName||tid)+'</div>'+
-      '<div style="font-size:12px;color:var(--text3);margin-top:2px">ID: '+tid+' &middot; Admin pw: '+(cfg.adminPassword||'?')+' &middot; Guest pw: '+(cfg.guestPassword||'?')+'</div>'+
+      '<div style="font-size:12px;color:var(--text3);margin-top:2px">ID: '+tid+' &middot; Admin: '+(cfg.adminPassword||'?')+' &middot; Guest: '+(cfg.guestPassword||'?')+'</div>'+
       '<div style="font-size:11px;margin-top:4px"><a href="'+link+'" target="_blank" style="color:var(--green);word-break:break-all">'+link+'</a></div>'+
     '</div>';
   });
-  el.innerHTML = h;
+  el.innerHTML=h||'<div style="color:var(--text3)">No teams yet.</div>';
 }
 
 </script>
