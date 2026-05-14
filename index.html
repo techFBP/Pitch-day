@@ -680,7 +680,6 @@ var isGuest        = false;
     return;
   }
   document.getElementById('no-team-screen').classList.add('hidden');
-  // Load team passwords + name from Firebase
   var xhr = new XMLHttpRequest();
   xhr.open('GET', FIREBASE_CFG, true);
   xhr.onload = function() {
