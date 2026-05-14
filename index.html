@@ -653,10 +653,13 @@ body.guest-mode .guest-only{display:flex!important}
 // Works from file://, offline, any browser. Firebase syncs in background if available.
 
 var FIREBASE_BASE  = 'https://pitch-day-1dc17-default-rtdb.firebaseio.com';
+var FIREBASE_KEY   = 'AIzaSyDQ_H1-4rDGuV0SJm466jDLKtgN1NQ8ZP8';
 var teamId         = new URLSearchParams(window.location.search).get('team') || '';
-var FIREBASE_URL   = FIREBASE_BASE + '/teams/' + teamId + '/data.json';
-var FIREBASE_CFG   = FIREBASE_BASE + '/teams/' + teamId + '/config.json';
-var FIREBASE_ALL   = FIREBASE_BASE + '/teams.json';
+var FIREBASE_URL   = teamId
+  ? FIREBASE_BASE + '/pitchday/teams/' + teamId + '/data.json?auth=' + FIREBASE_KEY
+  : FIREBASE_BASE + '/pitchday.json?auth=' + FIREBASE_KEY;
+var FIREBASE_CFG   = FIREBASE_BASE + '/pitchday/teams/' + teamId + '/config.json?auth=' + FIREBASE_KEY;
+var FIREBASE_ALL   = FIREBASE_BASE + '/pitchday/teams.json?auth=' + FIREBASE_KEY;
 var LS_KEY         = 'pitchday_' + (teamId || 'default');
 
 var PASSWORD       = 'pitchday2026';
@@ -677,7 +680,7 @@ var isGuest        = false;
     return;
   }
   document.getElementById('no-team-screen').classList.add('hidden');
-  // Load team config to get name + passwords
+  // Load team passwords + name from Firebase
   var xhr = new XMLHttpRequest();
   xhr.open('GET', FIREBASE_CFG, true);
   xhr.onload = function() {
@@ -771,7 +774,7 @@ function doFbSync() {
       fund:        state.fund
     });
     var xhr = new XMLHttpRequest();
-    xhr.open('PUT', FIREBASE_URL, true);
+    xhr.open('PUT', FIREBASE_URL+'?auth='+FIREBASE_KEY, true);
     xhr.setRequestHeader('Content-Type','application/json');
     xhr.onload = function(){ if(xhr.status>=200&&xhr.status<300){ setSyncStatus('ok'); } else { setSyncStatus('err'); } };
     xhr.onerror = function(){ setSyncStatus('err'); };
@@ -783,7 +786,7 @@ function doFbSync() {
 function fetchFromFirebase(cb) {
   try {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', FIREBASE_URL, true);
+    xhr.open('GET', FIREBASE_URL+'?auth='+FIREBASE_KEY, true);
     xhr.onload = function() {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
@@ -1995,12 +1998,12 @@ window.adminCreateTeam = function() {
   var res   = document.getElementById('adm-result');
   if (!tid||!tname||!apw||!gpw){ res.style.display='block';res.style.color='var(--red)';res.textContent='Fill in all fields.';return; }
   var xhr = new XMLHttpRequest();
-  xhr.open('PUT', FIREBASE_BASE+'/teams/'+tid+'/config.json', true);
+  xhr.open('PUT', FIREBASE_BASE+'/pitchday/teams/'+tid+'/config.json?auth='+FIREBASE_KEY, true);
   xhr.setRequestHeader('Content-Type','application/json');
   xhr.onload = function() {
     if (xhr.status>=200&&xhr.status<300) {
       var xhr2=new XMLHttpRequest();
-      xhr2.open('PUT', FIREBASE_BASE+'/teams/'+tid+'/data.json', true);
+      xhr2.open('PUT', FIREBASE_BASE+'/pitchday/teams/'+tid+'/data.json?auth='+FIREBASE_KEY, true);
       xhr2.setRequestHeader('Content-Type','application/json');
       xhr2.send(JSON.stringify({players:[],sessions:[],confirmed:[],format:7,lastTeams:null,sessionDate:'',fund:{contributions:[],expenses:[]}}));
       var link=window.location.origin+window.location.pathname+'?team='+tid;
@@ -2020,18 +2023,18 @@ window.adminCreateTeam = function() {
 function loadAdminTeams() {
   var el=document.getElementById('adm-teams-list'); if(!el)return;
   var xhr=new XMLHttpRequest();
-  xhr.open('GET', FIREBASE_ALL+'?shallow=true', true);
+  xhr.open('GET', FIREBASE_ALL, true);
   xhr.onload=function() {
     if(xhr.status>=200&&xhr.status<300){
       try{
         var teams=JSON.parse(xhr.responseText);
         if(!teams){el.innerHTML='<div style="color:var(--text3)">No teams yet.</div>';return;}
-        var ids=Object.keys(teams).filter(function(k){return k!=='admin';});
+        var ids=Object.keys(teams);
         if(!ids.length){el.innerHTML='<div style="color:var(--text3)">No teams yet.</div>';return;}
         var loaded=0,configs={};
         ids.forEach(function(tid){
           var x=new XMLHttpRequest();
-          x.open('GET',FIREBASE_BASE+'/teams/'+tid+'/config.json',true);
+          x.open('GET',FIREBASE_BASE+'/pitchday/teams/'+tid+'/config.json?auth='+FIREBASE_KEY,true);
           x.onload=function(){try{configs[tid]=JSON.parse(x.responseText)||{};}catch(e){configs[tid]={};}if(++loaded===ids.length)renderAdminList(ids,configs);};
           x.onerror=function(){configs[tid]={};if(++loaded===ids.length)renderAdminList(ids,configs);};
           x.send();
