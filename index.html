@@ -642,7 +642,7 @@ var isGuest        = false;
   }
   if (!teamId) {
     document.getElementById('no-team-screen').classList.add('hidden');
-    try{var s=localStorage.getItem(LS_KEY+"_auth");if(s==="admin"){isGuest=false;document.getElementById("lock-screen").classList.add("hidden");document.getElementById("app").classList.remove("hidden");initApp();}else if(s==="guest"){isGuest=true;document.getElementById("lock-screen").classList.add("hidden");document.getElementById("app").classList.remove("hidden");initApp();}}catch(e){} return;
+    return;
   }
   document.getElementById('no-team-screen').classList.add('hidden');
   var xhr = new XMLHttpRequest();
@@ -2029,3 +2029,16 @@ function renderAdminList(ids,configs){
 
 </body>
 </html>
+<script>
+window.addEventListener("DOMContentLoaded",function(){
+  try{
+    var s=localStorage.getItem(LS_KEY+"_auth");
+    if(s==="admin"||s==="guest"){
+      isGuest=s==="guest";
+      document.getElementById("lock-screen").classList.add("hidden");
+      document.getElementById("app").classList.remove("hidden");
+      initApp();
+    }
+  }catch(e){}
+});
+</script>
