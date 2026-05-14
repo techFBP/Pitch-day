@@ -225,7 +225,6 @@ body.guest-mode .guest-only{display:flex!important}
     <button class="ntab" id="t-teams" onclick="go('teams')"><span class="ntab-icon">&#127937;</span>Teams</button>
     <button class="ntab" id="t-fund" onclick="go('fund')"><span class="ntab-icon">&#128176;</span>Fund</button>
     <button class="ntab" id="t-history" onclick="go('history')"><span class="ntab-icon">&#127942;</span>Appearances</button>
-    <button class="ntab admin-only" id="t-postgame" onclick="go('postgame')"><span class="ntab-icon">&#128202;</span>Post-Game</button>
   </nav>
 </div>
 
@@ -386,40 +385,6 @@ body.guest-mode .guest-only{display:flex!important}
 </div>
 
 <!-- POST-GAME -->
-<div class="page admin-only" id="p-postgame">
-  <span class="slabel">Log Result</span>
-  <div class="card mb16">
-    <div class="fg">
-      <label class="fl">Date</label>
-      <input type="date" class="fi" id="pg-date">
-    </div>
-    <div style="margin-bottom:14px">
-      <label class="fl">Final Score</label>
-      <div class="scorerow">
-        <div style="text-align:center">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-family:var(--mono)">TEAM A</div>
-          <input type="number" class="scoreinp" id="pg-sa" min="0" max="99" placeholder="0">
-        </div>
-        <span class="scorevs">&#8212;</span>
-        <div style="text-align:center">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-family:var(--mono)">TEAM B</div>
-          <input type="number" class="scoreinp" id="pg-sb" min="0" max="99" placeholder="0">
-        </div>
-      </div>
-    </div>
-    <div class="fg">
-      <label class="fl">Format</label>
-      <select class="fs" id="pg-fmt"><option value="7">7v7</option><option value="9">9v9</option></select>
-    </div>
-    <div class="fg">
-      <label class="fl">Notes (optional)</label>
-      <input type="text" class="fi" id="pg-notes" placeholder="e.g. rainy day, full turnout">
-    </div>
-  </div>
-  <span class="slabel">Who Showed Up &amp; Goals</span>
-  <div class="card mb16"><div id="pg-players"></div></div>
-  <button class="btn btn-p btn-full" onclick="saveSession()">Save Session</button>
-</div>
 <!-- FUND -->
 <div class="page" id="p-fund">
 
@@ -857,6 +822,7 @@ function initApp() {
     state.sessions    = d.sessions    || state.sessions;
     state.format      = d.format      || state.format;
     state.lastTeams   = d.lastTeams   || state.lastTeams;
+    state.fund        = d.fund        || state.fund || { contributions:[], expenses:[] };
     state.sessionDate = fbIsNewer ? (d.sessionDate || todayStr()) : state.sessionDate;
     // Keep local confirmed list (more likely to be current)
     if (fbIsNewer && d.confirmed && d.confirmed.length > state.confirmed.length) {
@@ -907,7 +873,7 @@ function commitAppearances(date, attendeeIds) {
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
 window.go = function(id) {
-  var tabs=['roster','session','teams','fund','history','postgame'];
+  var tabs=['roster','session','teams','fund','history'];
   for(var i=0;i<tabs.length;i++){
     document.getElementById('p-'+tabs[i]).classList.toggle('on',tabs[i]===id);
     document.getElementById('t-'+tabs[i]).classList.toggle('on',tabs[i]===id);
@@ -915,8 +881,7 @@ window.go = function(id) {
   if(id==='roster')    renderRoster();
   else if(id==='session')  renderSession();
   else if(id==='teams')    renderTeams();
-  else if(id==='postgame') renderPostGame();
-  else if(id==='history')  renderHistory();
+  else if(id==='fund')     renderFund();  else if(id==='history')  renderHistory();
   else if(id==='fund')     renderFund();
 };
 
