@@ -635,7 +635,7 @@ var isGuest        = false;
 (function() {
   if (teamId === 'admin') {
     document.getElementById('no-team-screen').classList.add('hidden');
-    try{localStorage.setItem(LS_KEY+"_auth",isGuest?"guest":"admin");}catch(e){} document.getElementById("lock-screen").classList.add("hidden");
+    document.getElementById("lock-screen").classList.add("hidden");
     document.getElementById('admin-screen').classList.add('on');
     loadAdminTeams();
     return;
@@ -687,7 +687,7 @@ function normPos(raw) {
 // ─── STATE ───────────────────────────────────────────────────────────────────
 window.state = { players:[], sessions:[], confirmed:[], format:7, lastTeams:null, sessionDate:'', fund:{ contributions:[], expenses:[] } };
 
-function loadFromLS() { try{var a=localStorage.getItem(LS_KEY+"_auth");if(a==="guest"){isGuest=true;}else if(a==="admin"){isGuest=false;}}catch(e){}
+function loadFromLS() {
   try {
     var raw = localStorage.getItem(LS_KEY);
     if (raw) {
@@ -705,7 +705,7 @@ function loadFromLS() { try{var a=localStorage.getItem(LS_KEY+"_auth");if(a==="g
   } catch(e) { state.sessionDate = todayStr(); }
 }
 
-function saveToLS() { try{localStorage.setItem(LS_KEY+"_auth",isGuest?"guest":"admin");}catch(e){}
+function saveToLS() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       players:     state.players,
@@ -804,7 +804,7 @@ function initApp() {
   }
 
   // 1. Load from localStorage immediately — app is usable right away
-  loadFromLS(); if(localStorage.getItem(LS_KEY+"_auth")){document.getElementById("lock-screen").classList.add("hidden");document.getElementById("app").classList.remove("hidden");if(isGuest){document.body.classList.add("guest-mode");document.getElementById("guest-badge").classList.remove("hidden");}}
+  loadFromLS();
   checkDayRollover();
 
   var active = document.querySelector('.ntab.on');
@@ -2027,7 +2027,5 @@ function renderAdminList(ids,configs){
 
 </script>
 
-window.onload=function(){var a=localStorage.getItem(LS_KEY+"_auth");if(a==="admin"||a==="guest"){isGuest=a==="guest";document.getElementById("lock-screen").classList.add("hidden");document.getElementById("app").classList.remove("hidden");if(isGuest){document.body.classList.add("guest-mode");document.getElementById("guest-badge").classList.remove("hidden");}initApp();}}
-<script>setTimeout(function(){try{var s=localStorage.getItem(LS_KEY+"_auth");if(s==="admin"||s==="guest"){isGuest=s==="guest";document.getElementById("lock-screen").classList.add("hidden");document.getElementById("app").classList.remove("hidden");initApp();}}catch(e){}},500);</script>
 </body>
 </html>
