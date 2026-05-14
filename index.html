@@ -2027,18 +2027,6 @@ function renderAdminList(ids,configs){
 
 </script>
 
+<script>setTimeout(function(){try{var s=localStorage.getItem(LS_KEY+"_auth");if(s==="admin"||s==="guest"){isGuest=s==="guest";document.getElementById("lock-screen").classList.add("hidden");document.getElementById("app").classList.remove("hidden");initApp();}}catch(e){}},500);</script>
 </body>
 </html>
-<script>
-window.addEventListener("DOMContentLoaded",function(){
-  try{
-    var s=localStorage.getItem(LS_KEY+"_auth");
-    if(s==="admin"||s==="guest"){
-      isGuest=s==="guest";
-      document.getElementById("lock-screen").classList.add("hidden");
-      document.getElementById("app").classList.remove("hidden");
-      initApp();
-    }
-  }catch(e){}
-});
-</script>
