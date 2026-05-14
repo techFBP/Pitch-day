@@ -439,7 +439,6 @@ body.guest-mode .guest-only{display:flex!important}
     <button class="btn btn-d btn-sm admin-only" id="fund-clear-btn" onclick="clearAllFund()" style="display:none">Clear All</button>
   </div>
   <div id="fund-exp-list"></div>
-</div>
 
 
 
@@ -756,7 +755,7 @@ function fetchFromFirebase(cb) {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           var d = JSON.parse(xhr.responseText);
-          if (d !== null && d !== undefined) cb(d);
+          if (d && d.players) cb(d);
           else cb(null);
         } catch(e) { cb(null); }
       } else { cb(null); }
