@@ -756,7 +756,7 @@ function fetchFromFirebase(cb) {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           var d = JSON.parse(xhr.responseText);
-          if (d && d.players) cb(d);
+          if (d !== null && d !== undefined) cb(d);
           else cb(null);
         } catch(e) { cb(null); }
       } else { cb(null); }
