@@ -901,7 +901,7 @@ function renderRoster() {
     var p=sorted[i],rat=parseFloat(p.rating||3);
     var posH=(p.positions&&p.positions.length)?p.positions.map(function(x){return'<span class="ptag">'+x+'</span>';}).join(''):'<span style="color:var(--text3);font-size:12px">No position set</span>';
     var dotsH='';for(var d=0;d<5;d++)dotsH+='<div class="dot'+(d<Math.round(rat)?' on':'')+'"></div>';
-    h+='<div class="pcard" onclick="'+(isGuest?'':'openEdit(\''+p.id+'\'')+'">'+
+    h+='<div class="pcard" onclick="'+(isGuest?'':'openEdit(\''+p.id+'\')')+'">'+
       '<div class="avatar">'+initials(p.name)+'</div>'+
       '<div class="pinfo"><div class="pname">'+p.name+'</div><div class="pmeta">'+posH+'</div>'+(isGuest?'':'<div class="dots">'+dotsH+'</div>')+'</div>'+
       (isGuest?'':'<span class="rbadge '+rClass(rat)+'" onclick="event.stopPropagation();openQuickRate(\''+p.id+'\')" title="Tap to update rating">'+fmtR(rat)+'</span>')+
