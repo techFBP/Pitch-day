@@ -217,7 +217,7 @@ body.guest-mode .guest-only{display:flex!important}
     <span class="hdr-logo">&#9917;</span>
     <span class="hdr-title">Pitch Day</span>
     <span id="guest-badge" class="guest-badge hidden">GUEST</span>
-    <div class="sync-dot" id="sync-dot" title="Sync status"></div>
+    <button onclick="logout()" style="background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.6);font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--mono)">Out</button><div class="sync-dot" id="sync-dot" title="Sync status"></div>
   </div>
   <nav class="nav">
     <button class="ntab on" id="t-roster" onclick="go('roster')"><span class="ntab-icon">&#128101;</span>Roster</button>
@@ -635,14 +635,14 @@ var isGuest        = false;
 (function() {
   if (teamId === 'admin') {
     document.getElementById('no-team-screen').classList.add('hidden');
-    document.getElementById('lock-screen').classList.add('hidden');
+    try{localStorage.setItem(LS_KEY+"_auth",isGuest?"guest":"admin");}catch(e){} document.getElementById("lock-screen").classList.add("hidden");
     document.getElementById('admin-screen').classList.add('on');
     loadAdminTeams();
     return;
   }
   if (!teamId) {
     document.getElementById('no-team-screen').classList.add('hidden');
-    return; // will open lock screen and use original pitchday/ path
+    try{var s=localStorage.getItem(LS_KEY+"_auth");if(s==="admin"){isGuest=false;document.getElementById("lock-screen").classList.add("hidden");document.getElementById("app").classList.remove("hidden");initApp();}else if(s==="guest"){isGuest=true;document.getElementById("lock-screen").classList.add("hidden");document.getElementById("app").classList.remove("hidden");initApp();}}catch(e){} return;
   }
   document.getElementById('no-team-screen').classList.add('hidden');
   var xhr = new XMLHttpRequest();
@@ -780,6 +780,7 @@ function saveState() {
 }
 
 // ─── UNLOCK ───────────────────────────────────────────────────────────────────
+window.logout=function(){try{localStorage.removeItem(LS_KEY+"_auth");}catch(e){}document.getElementById("app").classList.add("hidden");document.getElementById("lock-screen").classList.remove("hidden");document.getElementById("lock-input").value="";document.getElementById("lock-err").textContent="";document.body.classList.remove("guest-mode");document.getElementById("guest-badge").classList.add("hidden");isGuest=false;};
 window.unlock = function() {
   var val = document.getElementById('lock-input').value.trim();
   if (val === PASSWORD) {
@@ -791,7 +792,7 @@ window.unlock = function() {
     document.getElementById('lock-input').value = '';
     return;
   }
-  document.getElementById('lock-screen').classList.add('hidden');
+  try{localStorage.setItem(LS_KEY+"_auth",isGuest?"guest":"admin");}catch(e){} document.getElementById("lock-screen").classList.add("hidden");
   document.getElementById('app').classList.remove('hidden');
   initApp();
 };
