@@ -798,9 +798,23 @@ window.unlock = function() {
 };
 
 function initApp() {
+  // Restore auth state from localStorage
+  try {
+    var savedAuth = localStorage.getItem(LS_KEY+'_auth');
+    if (savedAuth === 'guest') isGuest = true;
+    else if (savedAuth === 'admin') isGuest = false;
+  } catch(e) {}
+
+  // Show app, hide lock screen
+  document.getElementById('lock-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+
   if (isGuest) {
     document.body.classList.add('guest-mode');
     document.getElementById('guest-badge').classList.remove('hidden');
+  } else {
+    document.body.classList.remove('guest-mode');
+    document.getElementById('guest-badge').classList.add('hidden');
   }
 
   // 1. Load from localStorage immediately — app is usable right away
@@ -2024,6 +2038,17 @@ function renderAdminList(ids,configs){
   });
   el.innerHTML=h||'<div style="color:var(--text3)">No teams yet.</div>';
 }
+
+// ─── AUTO LOGIN ON REFRESH ────────────────────────────────────────────────────
+window.onload = function() {
+  try {
+    var a = localStorage.getItem(LS_KEY+'_auth');
+    if (a === 'admin' || a === 'guest') {
+      isGuest = (a === 'guest');
+      initApp();
+    }
+  } catch(e) {}
+};
 
 </script>
 
