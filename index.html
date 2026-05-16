@@ -2105,8 +2105,7 @@ window.checkAdminPin = function() {
 };
 
 // ─── AUTO LOGIN ON REFRESH ────────────────────────────────────────────────────
-\
-]window.onload = function() {
+window.onload = function() {
   if (teamId === 'admin') return;
   try {
     var a = localStorage.getItem(LS_KEY+'_auth');
