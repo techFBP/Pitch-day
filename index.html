@@ -191,6 +191,7 @@ body.guest-mode .guest-only{display:flex!important}
       <div class="fg"><label class="fl">Team Name</label><input type="text" class="fi" id="adm-teamname" placeholder="e.g. Red Sharks FC"></div>
       <div class="fg"><label class="fl">Admin Password</label><input type="text" class="fi" id="adm-adminpw" placeholder="admin password"></div>
       <div class="fg"><label class="fl">Guest Password</label><input type="text" class="fi" id="adm-guestpw" placeholder="guest password"></div>
+      <div class="fg"><label class="fl">Expiration Date</label><input type="date" class="fi" id="adm-expiry"></div>
       <button class="btn btn-p btn-full" onclick="adminCreateTeam()">Create Team</button>
       <div id="adm-result" style="margin-top:12px;font-size:13px;line-height:1.7;display:none"></div>
     </div>
@@ -1970,11 +1971,12 @@ function renderFund() {
 
 // ─── ADMIN FUNCTIONS ──────────────────────────────────────────────────────────
 window.adminCreateTeam = function() {
-  var tid   = document.getElementById('adm-teamid').value.trim().toLowerCase().replace(/[^a-z0-9]/g,'');
-  var tname = document.getElementById('adm-teamname').value.trim();
-  var apw   = document.getElementById('adm-adminpw').value.trim();
-  var gpw   = document.getElementById('adm-guestpw').value.trim();
-  var res   = document.getElementById('adm-result');
+  var tid    = document.getElementById('adm-teamid').value.trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+  var tname  = document.getElementById('adm-teamname').value.trim();
+  var apw    = document.getElementById('adm-adminpw').value.trim();
+  var gpw    = document.getElementById('adm-guestpw').value.trim();
+  var expiry = document.getElementById('adm-expiry').value;
+  var res    = document.getElementById('adm-result');
   if (!tid||!tname||!apw||!gpw){ res.style.display='block';res.style.color='var(--red)';res.textContent='Fill in all fields.';return; }
   var xhr = new XMLHttpRequest();
   xhr.open('PUT', FIREBASE_BASE+'/pitchday/teams/'+tid+'/config.json?auth='+FIREBASE_KEY, true);
@@ -1992,15 +1994,42 @@ window.adminCreateTeam = function() {
       document.getElementById('adm-teamname').value='';
       document.getElementById('adm-adminpw').value='';
       document.getElementById('adm-guestpw').value='';
+      document.getElementById('adm-expiry').value='';
       loadAdminTeams();
     } else { res.style.display='block';res.style.color='var(--red)';res.textContent='Firebase error: '+xhr.status; }
   };
   xhr.onerror=function(){ res.style.display='block';res.style.color='var(--red)';res.textContent='Network error.'; };
-  xhr.send(JSON.stringify({teamName:tname,adminPassword:apw,guestPassword:gpw,createdAt:new Date().toISOString()}));
+  xhr.send(JSON.stringify({teamName:tname,adminPassword:apw,guestPassword:gpw,expiryDate:expiry||'',suspended:false,createdAt:new Date().toISOString()}));
 };
-
+window.adminSuspendTeam = function(tid, suspend) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', FIREBASE_BASE+'/pitchday/teams/'+tid+'/config.json?auth='+FIREBASE_KEY, true);
+  xhr.onload = function() {
+    try {
+      var cfg = JSON.parse(xhr.responseText) || {};
+      cfg.suspended = suspend;
+      var xhr2 = new XMLHttpRequest();
+      xhr2.open('PUT', FIREBASE_BASE+'/pitchday/teams/'+tid+'/config.json?auth='+FIREBASE_KEY, true);
+      xhr2.setRequestHeader('Content-Type','application/json');
+      xhr2.onload = function() { loadAdminTeams(); };
+      xhr2.send(JSON.stringify(cfg));
+    } catch(e) {}
+  };
+  xhr.send();
+};
+window.adminDeleteTeam = function(tid, tname) {
+  if (!confirm('Delete team "'+tname+'"?\n\nPermanently removes team and ALL data. Cannot be undone.')) return;
+  var xhr1 = new XMLHttpRequest();
+  xhr1.open('DELETE', FIREBASE_BASE+'/pitchday/teams/'+tid+'/config.json?auth='+FIREBASE_KEY, true);
+  xhr1.send();
+  var xhr2 = new XMLHttpRequest();
+  xhr2.open('DELETE', FIREBASE_BASE+'/pitchday/teams/'+tid+'/data.json?auth='+FIREBASE_KEY, true);
+  xhr2.onload = function() { loadAdminTeams(); };
+  xhr2.send();
+};
 function loadAdminTeams() {
   var el=document.getElementById('adm-teams-list'); if(!el)return;
+  el.innerHTML='<div style="color:var(--text3);font-size:13px">Loading...</div>';
   var xhr=new XMLHttpRequest();
   xhr.open('GET', FIREBASE_ALL, true);
   xhr.onload=function() {
@@ -2023,34 +2052,33 @@ function loadAdminTeams() {
   };
   xhr.send();
 }
-
 function renderAdminList(ids,configs){
   var el=document.getElementById('adm-teams-list');
+  var today=new Date().toISOString().split('T')[0];
   var h='';
   ids.forEach(function(tid,i){
     var cfg=configs[tid]||{};
     var link=window.location.origin+window.location.pathname+'?team='+tid;
-    h+='<div style="padding:10px 0;'+(i<ids.length-1?'border-bottom:1px solid var(--surface)':'')+'">'+
-      '<div style="font-weight:500;font-size:14px">'+(cfg.teamName||tid)+'</div>'+
-      '<div style="font-size:12px;color:var(--text3);margin-top:2px">ID: '+tid+' &middot; Admin: '+(cfg.adminPassword||'?')+' &middot; Guest: '+(cfg.guestPassword||'?')+'</div>'+
-      '<div style="font-size:11px;margin-top:4px"><a href="'+link+'" target="_blank" style="color:var(--green);word-break:break-all">'+link+'</a></div>'+
+    var suspended=cfg.suspended===true;
+    var expired=cfg.expiryDate&&cfg.expiryDate<today;
+    var statusColor=suspended?'var(--red)':expired?'#e65100':'#2e7d32';
+    var statusText=suspended?'SUSPENDED':expired?'EXPIRED':'ACTIVE';
+    var expiryLabel=cfg.expiryDate?'Expires: '+cfg.expiryDate:'No expiry set';
+    h+='<div style="padding:12px 0;'+(i<ids.length-1?'border-bottom:1px solid var(--surface)':'')+'">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'+
+        '<div style="font-weight:600;font-size:14px">'+(cfg.teamName||tid)+'</div>'+
+        '<span style="font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:'+statusColor+';color:#fff">'+statusText+'</span>'+
+      '</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:2px">ID: '+tid+' &middot; Admin: '+(cfg.adminPassword||'?')+' &middot; Guest: '+(cfg.guestPassword||'?')+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">'+expiryLabel+'</div>'+
+      '<div style="font-size:11px;margin-bottom:8px"><a href="'+link+'" target="_blank" style="color:var(--green);word-break:break-all">'+link+'</a></div>'+
+      '<div style="display:flex;gap:6px">'+
+        (suspended
+          ? '<button onclick="adminSuspendTeam(\''+tid+'\',false)" style="padding:4px 12px;border-radius:6px;border:1.5px solid var(--green);background:var(--green-light);color:var(--green);font-size:11px;cursor:pointer;font-weight:600">&#9654; Resume</button>'
+          : '<button onclick="adminSuspendTeam(\''+tid+'\',true)" style="padding:4px 12px;border-radius:6px;border:1.5px solid var(--red);background:var(--red-bg);color:var(--red);font-size:11px;cursor:pointer;font-weight:600">&#9646;&#9646; Suspend</button>')+
+        '<button onclick="adminDeleteTeam(\''+tid+'\',\''+(cfg.teamName||tid)+'\')" style="padding:4px 12px;border-radius:6px;border:1.5px solid #888;background:#f5f5f5;color:#555;font-size:11px;cursor:pointer;font-weight:600">&#128465; Delete</button>'+
+      '</div>'+
     '</div>';
   });
   el.innerHTML=h||'<div style="color:var(--text3)">No teams yet.</div>';
 }
-
-// ─── AUTO LOGIN ON REFRESH ────────────────────────────────────────────────────
-window.onload = function() {
-  try {
-    var a = localStorage.getItem(LS_KEY+'_auth');
-    if (a === 'admin' || a === 'guest') {
-      isGuest = (a === 'guest');
-      initApp();
-    }
-  } catch(e) {}
-};
-
-</script>
-
-</body>
-</html>
