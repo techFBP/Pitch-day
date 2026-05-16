@@ -181,8 +181,18 @@ body.guest-mode .guest-only{display:flex!important}
   <div style="font-size:14px;color:rgba(255,255,255,.6);line-height:1.8;max-width:280px;text-align:center">No team found.<br>Ask your admin for your team link.<br><br><span style="color:rgba(255,255,255,.3);font-size:12px;font-family:'DM Mono',monospace">e.g. pitchday.app?team=yourteam</span></div>
 </div>
 
+<!-- ADMIN PIN SCREEN -->
+<div id="admin-pin-screen" style="position:fixed;inset:0;background:var(--green-dark);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000;padding:32px">
+  <div class="lock-logo">&#9917;</div>
+  <div class="lock-title">ADMIN PANEL</div>
+  <div class="lock-sub">Enter admin PIN to continue</div>
+  <input type="password" class="lock-input" id="admin-pin-input" placeholder="PIN" onkeydown="if(event.key==='Enter')checkAdminPin()">
+  <button class="lock-btn" onclick="checkAdminPin()">Unlock</button>
+  <div class="lock-err" id="admin-pin-err"></div>
+</div>
+
 <!-- ADMIN SCREEN -->
-<div id="admin-screen">
+<div id="admin-screen" style="display:none">
   <div class="admin-hdr"><div class="admin-hdr-title">&#9917; Pitch Day &mdash; Admin Panel</div></div>
   <div class="admin-body">
     <span class="slabel" style="margin-top:8px;display:block">Create New Team</span>
@@ -636,8 +646,6 @@ var isGuest        = false;
 (function() {
   if (teamId === 'admin') {
     document.getElementById('no-team-screen').classList.add('hidden');
-    var adminPin = prompt('Pitch Day Admin - Enter PIN:');
-    if (!adminPin || adminPin !== 'pd2026admin') { document.body.innerHTML='<div style="background:#0f4226;height:100vh;display:flex;align-items:center;justify-content:center;font-family:monospace;color:#f5c842;font-size:18px">Access Denied</div>'; return; }
     document.getElementById("lock-screen").classList.add("hidden");
     document.getElementById('admin-screen').classList.add('on');
     loadAdminTeams();
@@ -2084,6 +2092,18 @@ function renderAdminList(ids,configs){
   });
   el.innerHTML=h||'<div style="color:var(--text3)">No teams yet.</div>';
 }
+
+window.checkAdminPin = function() {
+  var pin = document.getElementById('admin-pin-input').value;
+  if (pin === 'pd2026admin') {
+    document.getElementById('admin-pin-screen').style.display='none';
+    document.getElementById('admin-screen').style.display='flex';
+    loadAdminTeams();
+  } else {
+    document.getElementById('admin-pin-err').textContent='Wrong PIN. Try again.';
+    document.getElementById('admin-pin-input').value='';
+  }
+};
 
 // ─── AUTO LOGIN ON REFRESH ────────────────────────────────────────────────────
 \
