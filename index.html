@@ -636,6 +636,8 @@ var isGuest        = false;
 (function() {
   if (teamId === 'admin') {
     document.getElementById('no-team-screen').classList.add('hidden');
+    var adminPin = prompt('Enter admin PIN:');
+    if (adminPin !== 'pd2026admin') { document.getElementById('lock-screen').classList.add('hidden'); return; }
     document.getElementById("lock-screen").classList.add("hidden");
     document.getElementById('admin-screen').classList.add('on');
     loadAdminTeams();
@@ -2084,7 +2086,8 @@ function renderAdminList(ids,configs){
 }
 
 // ─── AUTO LOGIN ON REFRESH ────────────────────────────────────────────────────
-window.onload = function() {
+\
+]window.onload = function() {
   if (teamId === 'admin') return;
   try {
     var a = localStorage.getItem(LS_KEY+'_auth');
