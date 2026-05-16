@@ -2082,3 +2082,20 @@ function renderAdminList(ids,configs){
   });
   el.innerHTML=h||'<div style="color:var(--text3)">No teams yet.</div>';
 }
+
+// ─── AUTO LOGIN ON REFRESH ────────────────────────────────────────────────────
+window.onload = function() {
+  if (teamId === 'admin') return;
+  try {
+    var a = localStorage.getItem(LS_KEY+'_auth');
+    if (a === 'admin' || a === 'guest') {
+      isGuest = (a === 'guest');
+      initApp();
+    }
+  } catch(e) {}
+};
+
+</script>
+
+</body>
+</html>
