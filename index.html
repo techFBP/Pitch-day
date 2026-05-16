@@ -636,8 +636,8 @@ var isGuest        = false;
 (function() {
   if (teamId === 'admin') {
     document.getElementById('no-team-screen').classList.add('hidden');
-    var adminPin = prompt('Enter admin PIN:');
-    if (adminPin !== 'pd2026admin') { document.getElementById('lock-screen').classList.add('hidden'); return; }
+    var adminPin = prompt('Pitch Day Admin - Enter PIN:');
+    if (!adminPin || adminPin !== 'pd2026admin') { document.body.innerHTML='<div style="background:#0f4226;height:100vh;display:flex;align-items:center;justify-content:center;font-family:monospace;color:#f5c842;font-size:18px">Access Denied</div>'; return; }
     document.getElementById("lock-screen").classList.add("hidden");
     document.getElementById('admin-screen').classList.add('on');
     loadAdminTeams();
