@@ -790,6 +790,9 @@ function saveState() {
 }
 
 // ─── UNLOCK ───────────────────────────────────────────────────────────────────
+window._inactivityTimer=null;
+function resetInactivity(){clearTimeout(window._inactivityTimer);window._inactivityTimer=setTimeout(function(){logout();},60*60*1000);}
+function startInactivityTimer(){resetInactivity();["click","keydown","touchstart","scroll"].forEach(function(e){document.addEventListener(e,resetInactivity);});}
 window.logout=function(){try{localStorage.removeItem(LS_KEY+"_auth");}catch(e){}document.getElementById("app").classList.add("hidden");document.getElementById("lock-screen").classList.remove("hidden");document.getElementById("lock-input").value="";document.getElementById("lock-err").textContent="";document.body.classList.remove("guest-mode");document.getElementById("guest-badge").classList.add("hidden");isGuest=false;};
 window.unlock = function() {
   var val = document.getElementById('lock-input').value.trim();
@@ -802,7 +805,7 @@ window.unlock = function() {
     document.getElementById('lock-input').value = '';
     return;
   }
-  try{localStorage.setItem(LS_KEY+"_auth",isGuest?"guest":"admin");}catch(e){} document.getElementById("lock-screen").classList.add("hidden");
+  try{localStorage.setItem(LS_KEY+"_auth",isGuest?"guest":"admin");}catch(e){} startInactivityTimer(); document.getElementById("lock-screen").classList.add("hidden");
   document.getElementById('app').classList.remove('hidden');
   initApp();
 };
