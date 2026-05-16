@@ -647,8 +647,7 @@ var isGuest        = false;
   if (teamId === 'admin') {
     document.getElementById('no-team-screen').classList.add('hidden');
     document.getElementById("lock-screen").classList.add("hidden");
-    document.getElementById('admin-screen').classList.add('on');
-    loadAdminTeams();
+    document.getElementById('admin-pin-screen').style.display='flex';
     return;
   }
   if (!teamId) {
