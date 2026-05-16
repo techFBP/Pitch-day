@@ -217,7 +217,7 @@ body.guest-mode .guest-only{display:flex!important}
     <span class="hdr-logo">&#9917;</span>
     <span class="hdr-title">Pitch Day</span>
     <span id="guest-badge" class="guest-badge hidden">GUEST</span>
-    <button onclick="logout()" style="background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.6);font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--mono)">Log off</button><div class="sync-dot" id="sync-dot" title="Sync status"></div>
+    <button onclick="logout()" style="background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.6);font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--mono)">Out</button><div class="sync-dot" id="sync-dot" title="Sync status"></div>
   </div>
   <nav class="nav">
     <button class="ntab on" id="t-roster" onclick="go('roster')"><span class="ntab-icon">&#128101;</span>Roster</button>
@@ -439,7 +439,6 @@ body.guest-mode .guest-only{display:flex!important}
     <button class="btn btn-d btn-sm admin-only" id="fund-clear-btn" onclick="clearAllFund()" style="display:none">Clear All</button>
   </div>
   <div id="fund-exp-list"></div>
-</div>
 
 
 
@@ -626,7 +625,7 @@ var FIREBASE_URL   = teamId
   : FIREBASE_BASE + '/pitchday.json?auth=' + FIREBASE_KEY;
 var FIREBASE_CFG   = FIREBASE_BASE + '/pitchday/teams/' + teamId + '/config.json?auth=' + FIREBASE_KEY;
 var FIREBASE_ALL   = FIREBASE_BASE + '/pitchday/teams.json?auth=' + FIREBASE_KEY;
-var LS_KEY         = teamId ? 'pitchday_' + teamId : 'pitchday_v3';
+var LS_KEY         = teamId ? 'pitchday_' + teamId : 'pitchday_v1';
 
 var PASSWORD       = 'pitchday2026';
 var GUEST_PASSWORD = 'soccer';
@@ -781,9 +780,6 @@ function saveState() {
 }
 
 // ─── UNLOCK ───────────────────────────────────────────────────────────────────
-window._inactivityTimer=null;
-function resetInactivity(){clearTimeout(window._inactivityTimer);window._inactivityTimer=setTimeout(function(){logout();},60*60*1000);}
-function startInactivityTimer(){resetInactivity();["click","keydown","touchstart","scroll"].forEach(function(e){document.addEventListener(e,resetInactivity);});}
 window.logout=function(){try{localStorage.removeItem(LS_KEY+"_auth");}catch(e){}document.getElementById("app").classList.add("hidden");document.getElementById("lock-screen").classList.remove("hidden");document.getElementById("lock-input").value="";document.getElementById("lock-err").textContent="";document.body.classList.remove("guest-mode");document.getElementById("guest-badge").classList.add("hidden");isGuest=false;};
 window.unlock = function() {
   var val = document.getElementById('lock-input').value.trim();
@@ -796,7 +792,7 @@ window.unlock = function() {
     document.getElementById('lock-input').value = '';
     return;
   }
-  try{localStorage.setItem(LS_KEY+"_auth",isGuest?"guest":"admin");}catch(e){} startInactivityTimer(); document.getElementById("lock-screen").classList.add("hidden");
+  try{localStorage.setItem(LS_KEY+"_auth",isGuest?"guest":"admin");}catch(e){} document.getElementById("lock-screen").classList.add("hidden");
   document.getElementById('app').classList.remove('hidden');
   initApp();
 };
