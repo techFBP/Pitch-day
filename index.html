@@ -175,11 +175,17 @@ body.guest-mode .guest-only{display:flex!important}
 .cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:4px;font-size:11px;font-family:var(--mono);cursor:default;color:var(--border);position:relative}
 .cal-day.game{color:var(--text2);cursor:pointer}
 .cal-day.game:hover{background:var(--surface)}
-.cal-day.has-session{background:var(--green-light);color:var(--green);font-weight:600}
+.cal-day.has-session{background:var(--green-light);color:var(--green);font-weight:600;cursor:pointer}
 .cal-day.has-session:hover{background:#d0eadb}
 .cal-day.selected{background:var(--green);color:#fff;font-weight:700}
 .cal-day.today{outline:2px solid var(--green-mid);outline-offset:-2px}
 .cal-day.future-game{color:var(--accent-dark);font-weight:500}
+.cal-popup-overlay{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.3)}
+.cal-popup-overlay.on{display:block}
+.cal-popup{position:fixed;background:var(--white);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.18);padding:14px;z-index:301;width:280px;animation:slideUp .2s ease}
+.cal-btn{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:var(--rs);border:1.5px solid var(--border);background:var(--white);font-size:13px;cursor:pointer;color:var(--text2);font-family:var(--sans);margin-bottom:14px}
+.cal-btn:hover{background:var(--surface);border-color:#aaa}
+.cal-selected-label{font-family:var(--mono);font-size:12px;color:var(--green);font-weight:500}
 .date-card-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:4px}
 .date-card-val{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--accent)}
 .date-inp{background:transparent;border:none;outline:none;font-family:var(--mono);font-size:15px;font-weight:500;color:var(--accent);width:auto;-webkit-appearance:none;appearance:none;cursor:pointer}
@@ -188,6 +194,21 @@ body.guest-mode .guest-only{display:flex!important}
 </style>
 </head>
 <body>
+
+<!-- CALENDAR POPUP -->
+<div class="cal-popup-overlay" id="cal-overlay" onclick="closeCal()"></div>
+<div class="cal-popup" id="cal-popup" style="display:none">
+  <div class="cal-header">
+    <button class="cal-nav" onclick="calNav('cur',-1)">&#8249;</button>
+    <span class="cal-title" id="cal-popup-title"></span>
+    <button class="cal-nav" onclick="calNav('cur',1)">&#8250;</button>
+  </div>
+  <div class="cal-grid" id="cal-popup-grid"></div>
+  <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:11px;color:var(--text3)">&#9632; played &nbsp; &#9633; game day</span>
+    <button class="btn btn-g btn-sm" onclick="closeCal()">Close</button>
+  </div>
+</div>
 
 <!-- NO TEAM SCREEN -->
 <div id="no-team-screen">
@@ -281,14 +302,9 @@ body.guest-mode .guest-only{display:flex!important}
 <!-- SESSION -->
 <div class="page" id="p-session">
 
-  <!-- CALENDAR -->
-  <div class="cal-wrap" id="session-cal-wrap">
-    <div class="cal-header">
-      <button class="cal-nav" onclick="calNav('session',-1)">&#8249;</button>
-      <span class="cal-title" id="session-cal-title"></span>
-      <button class="cal-nav" onclick="calNav('session',1)">&#8250;</button>
-    </div>
-    <div class="cal-grid" id="session-cal-grid"></div>
+  <!-- CALENDAR BUTTON -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+    <button class="cal-btn" onclick="openCal('session')">&#128197; <span id="session-date-label">Select date</span></button>
   </div>
   <input type="hidden" id="session-date" value="">
   <div id="session-reset-pill" class="reset-pill hidden">New Day — Reset</div>
@@ -364,14 +380,9 @@ body.guest-mode .guest-only{display:flex!important}
 <!-- TEAMS -->
 <div class="page" id="p-teams">
 
-  <!-- CALENDAR -->
-  <div class="cal-wrap" id="teams-cal-wrap">
-    <div class="cal-header">
-      <button class="cal-nav" onclick="calNav('teams',-1)">&#8249;</button>
-      <span class="cal-title" id="teams-cal-title"></span>
-      <button class="cal-nav" onclick="calNav('teams',1)">&#8250;</button>
-    </div>
-    <div class="cal-grid" id="teams-cal-grid"></div>
+  <!-- CALENDAR BUTTON -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+    <button class="cal-btn" onclick="openCal('teams')">&#128197; <span id="teams-date-label">Select date</span></button>
   </div>
   <input type="hidden" id="teams-date" value="">
   <div id="teams-date-pill" class="reset-pill hidden"></div>
@@ -1040,9 +1051,10 @@ window.deletePlayer=function(){
 };
 
 // ─── CALENDAR ─────────────────────────────────────────────────────────────────
-var calMonth = { session: null, teams: null };
 var DOW_MAP = { sun:0, mon:1, tue:2, wed:3, thu:4, fri:5, sat:6 };
 var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+var calCur = { y: new Date().getFullYear(), m: new Date().getMonth() };
+var calActiveTab = 'session';
 
 function isGameDay(date) {
   var days = window.GAME_DAYS || ['tue','sat'];
@@ -1050,66 +1062,100 @@ function isGameDay(date) {
   return days.some(function(d){ return DOW_MAP[d] === dow; });
 }
 
-function hasSession(dateStr) {
-  return state.sessions.some(function(s){ return s.date === dateStr; });
+function hasSession(ds) {
+  return state.sessions.some(function(s){ return s.date === ds; });
 }
 
-function dateStr(y,m,d) {
+function makeDateStr(y,m,d) {
   return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
 }
 
-function renderCal(tab) {
-  var today = new Date(); today.setHours(0,0,0,0);
-  var todayStr2 = dateStr(today.getFullYear(), today.getMonth(), today.getDate());
-  if (!calMonth[tab]) { calMonth[tab] = { y: today.getFullYear(), m: today.getMonth() }; }
-  var y = calMonth[tab].y, m = calMonth[tab].m;
-  var titleEl = document.getElementById(tab+'-cal-title');
-  var gridEl  = document.getElementById(tab+'-cal-grid');
-  if (!titleEl || !gridEl) return;
-  titleEl.textContent = MONTH_NAMES[m] + ' ' + y;
-  var selected = (tab==='session' ? state.sessionDate : state.sessionDate) || todayStr2;
-  var firstDay = new Date(y, m, 1).getDay();
-  var daysInMonth = new Date(y, m+1, 0).getDate();
-  var h = '';
-  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(function(d){ h+='<div class="cal-dow">'+d+'</div>'; });
-  for (var i=0; i<firstDay; i++) h+='<div class="cal-day"></div>';
-  for (var d2=1; d2<=daysInMonth; d2++) {
-    var ds = dateStr(y, m, d2);
-    var dt = new Date(y, m, d2);
-    var isGame = isGameDay(dt);
-    var isSel  = ds === selected;
-    var isToday = ds === todayStr2;
-    var hasSess = hasSession(ds);
-    var isFut  = dt > today;
-    var cls = 'cal-day';
-    if (isGame) cls += hasSess ? ' has-session' : (isFut ? ' future-game' : ' game');
-    if (isSel && isGame) cls += ' selected';
-    if (isToday) cls += ' today';
-    var onclick = isGame ? 'onclick="calSelect(\''+tab+'\',\''+ds+'\')"' : '';
-    h += '<div class="'+cls+'" '+onclick+'>'+d2+'</div>';
-  }
-  gridEl.innerHTML = h;
+function fmtDateLabel(ds) {
+  if (!ds) return 'Select date';
+  var d = new Date(ds+'T12:00:00');
+  return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
 }
 
-window.calNav = function(tab, dir) {
-  if (!calMonth[tab]) { var t=new Date(); calMonth[tab]={y:t.getFullYear(),m:t.getMonth()}; }
-  calMonth[tab].m += dir;
-  if (calMonth[tab].m > 11) { calMonth[tab].m=0; calMonth[tab].y++; }
-  if (calMonth[tab].m < 0)  { calMonth[tab].m=11; calMonth[tab].y--; }
-  renderCal(tab);
+function renderCalPopup() {
+  var today = new Date(); today.setHours(0,0,0,0);
+  var todayDs = makeDateStr(today.getFullYear(), today.getMonth(), today.getDate());
+  var y = calCur.y, m = calCur.m;
+  document.getElementById('cal-popup-title').textContent = MONTH_NAMES[m]+' '+y;
+  var selected = state.sessionDate || todayDs;
+  var firstDay = new Date(y,m,1).getDay();
+  var daysInMonth = new Date(y,m+1,0).getDate();
+  var h='';
+  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(function(d){h+='<div class="cal-dow">'+d+'</div>';});
+  for(var i=0;i<firstDay;i++) h+='<div class="cal-day"></div>';
+  for(var d2=1;d2<=daysInMonth;d2++){
+    var ds=makeDateStr(y,m,d2);
+    var dt=new Date(y,m,d2);
+    var isGame=isGameDay(dt);
+    var hasSess=hasSession(ds);
+    var isFut=dt>today;
+    var isSel=ds===selected;
+    var isToday=ds===todayDs;
+    var cls='cal-day';
+    if(hasSess) cls+=' has-session';
+    else if(isGame) cls+=(isFut?' future-game':' game');
+    if(isSel) cls+=' selected';
+    if(isToday) cls+=' today';
+    var clickable=hasSess||isGame;
+    var onclick=clickable?'onclick="calSelect(\''+ds+'\')"':'';
+    h+='<div class="'+cls+'" '+onclick+'>'+d2+'</div>';
+  }
+  document.getElementById('cal-popup-grid').innerHTML=h;
+}
+
+window.openCal = function(tab) {
+  calActiveTab = tab;
+  var sd = state.sessionDate;
+  if(sd){ var d=new Date(sd+'T12:00:00'); calCur={y:d.getFullYear(),m:d.getMonth()}; }
+  else { var n=new Date(); calCur={y:n.getFullYear(),m:n.getMonth()}; }
+  renderCalPopup();
+  // Position popup near button
+  document.getElementById('cal-overlay').classList.add('on');
+  var pop = document.getElementById('cal-popup');
+  pop.style.display='block';
+  pop.style.top='200px';
+  pop.style.left='50%';
+  pop.style.transform='translateX(-50%)';
 };
 
-window.calSelect = function(tab, ds) {
-  // Just browse — no saving, no prompts
+window.closeCal = function() {
+  document.getElementById('cal-overlay').classList.remove('on');
+  document.getElementById('cal-popup').style.display='none';
+};
+
+window.calNav = function(tab, dir) {
+  calCur.m += dir;
+  if(calCur.m>11){calCur.m=0;calCur.y++;}
+  if(calCur.m<0){calCur.m=11;calCur.y--;}
+  renderCalPopup();
+};
+
+window.calSelect = function(ds) {
   state.sessionDate = ds;
   document.getElementById('session-date').value = ds;
   document.getElementById('teams-date').value = ds;
+  var lbl = fmtDateLabel(ds);
+  var sl = document.getElementById('session-date-label');
+  var tl = document.getElementById('teams-date-label');
+  if(sl) sl.textContent = lbl;
+  if(tl) tl.textContent = lbl;
   saveState();
-  renderCal('session'); renderCal('teams');
   updateResetPill();
   renderSession();
-  if(tab==='teams') renderTeams();
+  closeCal();
 };
+
+function updateCalLabels() {
+  var lbl = fmtDateLabel(state.sessionDate);
+  var sl = document.getElementById('session-date-label');
+  var tl = document.getElementById('teams-date-label');
+  if(sl) sl.textContent = lbl;
+  if(tl) tl.textContent = lbl;
+}
 
 // ─── SESSION DATE ─────────────────────────────────────────────────────────────
 window.onSessionDateChange = function() {
@@ -1161,7 +1207,7 @@ function renderSession(){
   var isPast=sd<today;
   var sdEl=document.getElementById('session-date');
   if(sdEl)sdEl.value=sd;
-  renderCal('session');
+  updateCalLabels();
   updateResetPill();
   // Populate guest read-only date card
   var guestDateEl=document.getElementById('session-date-guest-val');
