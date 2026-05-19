@@ -1253,6 +1253,7 @@ window.processPasteList=function(){
       out+=s[ci];
     }
     out=out.trim();
+    out=out.replace(/^\d+[\.\)]\s*/,'').trim();
     out=out.replace(/ *[(][^)]*[)] *$/,'').trim();
     return out;
   }
