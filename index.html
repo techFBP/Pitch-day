@@ -165,6 +165,21 @@ body.guest-mode .guest-only{display:flex!important}
 .paid-badge{font-family:var(--mono);font-size:12px;padding:2px 7px;border-radius:4px;background:#e8f5e9;color:#1b5e20;flex-shrink:0}
 /* date picker card */
 .date-card{background:var(--green-dark);border-radius:var(--r);padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cal-wrap{background:var(--green-dark);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-title{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--accent);letter-spacing:.08em}
+.cal-nav{background:none;border:none;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer;padding:2px 8px;line-height:1}
+.cal-nav:hover{color:#fff}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-dow{font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.4);text-align:center;padding:2px 0;text-transform:uppercase}
+.cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px;font-family:var(--mono);cursor:default;color:rgba(255,255,255,.25);position:relative}
+.cal-day.game{color:rgba(255,255,255,.7);cursor:pointer}
+.cal-day.game:hover{background:rgba(255,255,255,.1)}
+.cal-day.has-session{background:rgba(76,175,80,.25);color:#81c784;font-weight:600}
+.cal-day.has-session:hover{background:rgba(76,175,80,.35)}
+.cal-day.selected{background:var(--accent);color:var(--green-dark);font-weight:700}
+.cal-day.today{outline:2px solid rgba(255,255,255,.3);outline-offset:-2px}
+.cal-day.future-game{color:var(--accent);opacity:.7}
 .date-card-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:4px}
 .date-card-val{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--accent)}
 .date-inp{background:transparent;border:none;outline:none;font-family:var(--mono);font-size:15px;font-weight:500;color:var(--accent);width:auto;-webkit-appearance:none;appearance:none;cursor:pointer}
@@ -202,6 +217,17 @@ body.guest-mode .guest-only{display:flex!important}
       <div class="fg"><label class="fl">Admin Password</label><input type="text" class="fi" id="adm-adminpw" placeholder="admin password"></div>
       <div class="fg"><label class="fl">Guest Password</label><input type="text" class="fi" id="adm-guestpw" placeholder="guest password"></div>
       <div class="fg"><label class="fl">Expiration Date</label><input type="date" class="fi" id="adm-expiry"></div>
+      <div class="fg"><label class="fl">Game Days</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="gd-mon"> Monday</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="gd-tue"> Tuesday</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="gd-wed"> Wednesday</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="gd-thu"> Thursday</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="gd-fri"> Friday</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="gd-sat"> Saturday</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="gd-sun"> Sunday</label>
+        </div>
+      </div>
       <button class="btn btn-p btn-full" onclick="adminCreateTeam()">Create Team</button>
       <div id="adm-result" style="margin-top:12px;font-size:13px;line-height:1.7;display:none"></div>
     </div>
@@ -255,16 +281,17 @@ body.guest-mode .guest-only{display:flex!important}
 <!-- SESSION -->
 <div class="page" id="p-session">
 
-  <!-- DATE PICKER CARD -->
-  <div class="date-card admin-only" id="session-date-card">
-    <div>
-      <div class="date-card-label">Game Date</div>
-      <input type="date" class="date-inp" id="session-date" onchange="onSessionDateChange()">
+  <!-- CALENDAR -->
+  <div class="cal-wrap" id="session-cal-wrap">
+    <div class="cal-header">
+      <button class="cal-nav" onclick="calNav('session',-1)">&#8249;</button>
+      <span class="cal-title" id="session-cal-title"></span>
+      <button class="cal-nav" onclick="calNav('session',1)">&#8250;</button>
     </div>
-    <div id="session-reset-pill" class="reset-pill hidden">New Day — Reset</div>
+    <div class="cal-grid" id="session-cal-grid"></div>
   </div>
-
-  <!-- GUEST: read-only date display -->
+  <input type="hidden" id="session-date" value="">
+  <div id="session-reset-pill" class="reset-pill hidden">New Day — Reset</div>
   <div class="date-card guest-only" id="session-date-guest" style="display:none">
     <div>
       <div class="date-card-label">Game Date</div>
@@ -337,16 +364,17 @@ body.guest-mode .guest-only{display:flex!important}
 <!-- TEAMS -->
 <div class="page" id="p-teams">
 
-  <!-- DATE PICKER CARD — mirrors Session tab -->
-  <div class="date-card admin-only" id="teams-date-card">
-    <div>
-      <div class="date-card-label">Game Date</div>
-      <input type="date" class="date-inp" id="teams-date" onchange="onTeamsDateChange()">
+  <!-- CALENDAR -->
+  <div class="cal-wrap" id="teams-cal-wrap">
+    <div class="cal-header">
+      <button class="cal-nav" onclick="calNav('teams',-1)">&#8249;</button>
+      <span class="cal-title" id="teams-cal-title"></span>
+      <button class="cal-nav" onclick="calNav('teams',1)">&#8250;</button>
     </div>
-    <div id="teams-date-pill" class="reset-pill hidden"></div>
+    <div class="cal-grid" id="teams-cal-grid"></div>
   </div>
-
-  <!-- GUEST: read-only date display -->
+  <input type="hidden" id="teams-date" value="">
+  <div id="teams-date-pill" class="reset-pill hidden"></div>
   <div class="date-card guest-only" id="teams-date-guest" style="display:none">
     <div>
       <div class="date-card-label">Game Date</div>
@@ -642,6 +670,7 @@ var LS_KEY         = teamId ? 'pitchday_' + teamId : 'pitchday_v1';
 var PASSWORD       = 'pitchday2026';
 var GUEST_PASSWORD = 'soccer';
 var isGuest        = false;
+window.GAME_DAYS   = ['tue','sat']; // default game days, overridden by team config
 
 // ─── TEAM ROUTING ─────────────────────────────────────────────────────────────
 (function() {
@@ -666,6 +695,7 @@ var isGuest        = false;
           if (cfg.adminPassword) PASSWORD = cfg.adminPassword;
           if (cfg.guestPassword) GUEST_PASSWORD = cfg.guestPassword;
           if (cfg.teamName) document.querySelector('.lock-sub').textContent = cfg.teamName;
+          if (cfg.gameDays) window.GAME_DAYS = cfg.gameDays;
         }
       } catch(e) {}
     }
@@ -1009,6 +1039,84 @@ window.deletePlayer=function(){
   saveState();closeM('m-player');renderRoster();
 };
 
+// ─── CALENDAR ─────────────────────────────────────────────────────────────────
+var calMonth = { session: null, teams: null };
+var DOW_MAP = { sun:0, mon:1, tue:2, wed:3, thu:4, fri:5, sat:6 };
+var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function isGameDay(date) {
+  var days = window.GAME_DAYS || ['tue','sat'];
+  var dow = date.getDay();
+  return days.some(function(d){ return DOW_MAP[d] === dow; });
+}
+
+function hasSession(dateStr) {
+  return state.sessions.some(function(s){ return s.date === dateStr; });
+}
+
+function dateStr(y,m,d) {
+  return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+}
+
+function renderCal(tab) {
+  var today = new Date(); today.setHours(0,0,0,0);
+  var todayStr2 = dateStr(today.getFullYear(), today.getMonth(), today.getDate());
+  if (!calMonth[tab]) { calMonth[tab] = { y: today.getFullYear(), m: today.getMonth() }; }
+  var y = calMonth[tab].y, m = calMonth[tab].m;
+  var titleEl = document.getElementById(tab+'-cal-title');
+  var gridEl  = document.getElementById(tab+'-cal-grid');
+  if (!titleEl || !gridEl) return;
+  titleEl.textContent = MONTH_NAMES[m] + ' ' + y;
+  var selected = (tab==='session' ? state.sessionDate : state.sessionDate) || todayStr2;
+  var firstDay = new Date(y, m, 1).getDay();
+  var daysInMonth = new Date(y, m+1, 0).getDate();
+  var h = '';
+  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(function(d){ h+='<div class="cal-dow">'+d+'</div>'; });
+  for (var i=0; i<firstDay; i++) h+='<div class="cal-day"></div>';
+  for (var d2=1; d2<=daysInMonth; d2++) {
+    var ds = dateStr(y, m, d2);
+    var dt = new Date(y, m, d2);
+    var isGame = isGameDay(dt);
+    var isSel  = ds === selected;
+    var isToday = ds === todayStr2;
+    var hasSess = hasSession(ds);
+    var isFut  = dt > today;
+    var cls = 'cal-day';
+    if (isGame) cls += hasSess ? ' has-session' : (isFut ? ' future-game' : ' game');
+    if (isSel && isGame) cls += ' selected';
+    if (isToday) cls += ' today';
+    var onclick = isGame ? 'onclick="calSelect(\''+tab+'\',\''+ds+'\')"' : '';
+    h += '<div class="'+cls+'" '+onclick+'>'+d2+'</div>';
+  }
+  gridEl.innerHTML = h;
+}
+
+window.calNav = function(tab, dir) {
+  if (!calMonth[tab]) { var t=new Date(); calMonth[tab]={y:t.getFullYear(),m:t.getMonth()}; }
+  calMonth[tab].m += dir;
+  if (calMonth[tab].m > 11) { calMonth[tab].m=0; calMonth[tab].y++; }
+  if (calMonth[tab].m < 0)  { calMonth[tab].m=11; calMonth[tab].y--; }
+  renderCal(tab);
+};
+
+window.calSelect = function(tab, ds) {
+  var oldDate = state.sessionDate;
+  if (ds === oldDate) return;
+  if (state.confirmed.length > 0 && ds !== oldDate) {
+    if (confirm('Changing date will save confirmed players for '+oldDate+' and reset. Continue?')) {
+      commitAppearances(oldDate, state.confirmed.slice());
+      state.confirmed = []; state.lastTeams = null;
+    } else { return; }
+  } else { state.lastTeams = null; }
+  state.sessionDate = ds;
+  document.getElementById('session-date').value = ds;
+  document.getElementById('teams-date').value = ds;
+  saveState();
+  renderCal('session'); renderCal('teams');
+  updateResetPill();
+  renderSession();
+};
+
 // ─── SESSION DATE ─────────────────────────────────────────────────────────────
 window.onSessionDateChange = function() {
   var newDate = document.getElementById('session-date').value;
@@ -1059,6 +1167,7 @@ function renderSession(){
   var isPast=sd<today;
   var sdEl=document.getElementById('session-date');
   if(sdEl)sdEl.value=sd;
+  renderCal('session');
   updateResetPill();
   // Populate guest read-only date card
   var guestDateEl=document.getElementById('session-date-guest-val');
@@ -1990,6 +2099,8 @@ window.adminCreateTeam = function() {
   var apw    = document.getElementById('adm-adminpw').value.trim();
   var gpw    = document.getElementById('adm-guestpw').value.trim();
   var expiry = document.getElementById('adm-expiry').value;
+  var gameDays=[];
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(function(d){if(document.getElementById('gd-'+d).checked)gameDays.push(d);});
   var res    = document.getElementById('adm-result');
   if (!tid||!tname||!apw||!gpw){ res.style.display='block';res.style.color='var(--red)';res.textContent='Fill in all fields.';return; }
   var xhr = new XMLHttpRequest();
@@ -2013,7 +2124,7 @@ window.adminCreateTeam = function() {
     } else { res.style.display='block';res.style.color='var(--red)';res.textContent='Firebase error: '+xhr.status; }
   };
   xhr.onerror=function(){ res.style.display='block';res.style.color='var(--red)';res.textContent='Network error.'; };
-  xhr.send(JSON.stringify({teamName:tname,adminPassword:apw,guestPassword:gpw,expiryDate:expiry||'',suspended:false,createdAt:new Date().toISOString()}));
+  xhr.send(JSON.stringify({teamName:tname,adminPassword:apw,guestPassword:gpw,expiryDate:expiry||'',suspended:false,gameDays:gameDays,createdAt:new Date().toISOString()}));
 };
 window.adminSuspendTeam = function(tid, suspend) {
   var xhr = new XMLHttpRequest();
@@ -2099,7 +2210,7 @@ function renderAdminList(ids,configs){
 
 window.checkAdminPin = function() {
   var pin = document.getElementById('admin-pin-input').value;
-  if (pin === 'pd2026admin') {
+  if (pin === '0474') {
     document.getElementById('admin-pin-screen').style.display='none';
     document.getElementById('admin-screen').style.display='flex';
     loadAdminTeams();
