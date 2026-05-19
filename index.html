@@ -373,7 +373,7 @@ body.guest-mode .guest-only{display:flex!important}
       </div>
       <div id="session-past-list"></div>
     </div>
-    <button class="btn btn-p btn-full" onclick="savePastSession()">&#10003; Save Attendance</button>
+    <button class="btn btn-p btn-full admin-only" onclick="savePastSession()">&#10003; Save Attendance</button>
   </div>
 </div>
 
@@ -381,7 +381,7 @@ body.guest-mode .guest-only{display:flex!important}
 <div class="page" id="p-teams">
 
   <!-- CALENDAR BUTTON -->
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px" class="admin-only">
     <button class="cal-btn" onclick="openCal('teams')">&#128197; <span id="teams-date-label">Select date</span></button>
   </div>
   <input type="hidden" id="teams-date" value="">
@@ -1218,7 +1218,7 @@ function renderSession(){
   var rsvpWrap=document.getElementById('rsvp-list');
   var pastPanel=document.getElementById('session-past-panel');
 
-  if(isPast&&!isGuest){
+  if(isPast){
     if(rsvpWrap)rsvpWrap.style.display='none';
     if(pastPanel)pastPanel.style.display='block';
     var d=new Date(sd+'T12:00:00');
@@ -1244,7 +1244,8 @@ function renderSession(){
       var pp=sorted2[pi],pon=presel.indexOf(pp.id)>=0;
       pastAttend[pp.id]=pon;
       var ppos=(pp.positions&&pp.positions.length)?pp.positions[0]:'--';
-      h2+='<div class="ritem" onclick="togglePastAtt(\''+pp.id+'\')" style="padding:9px 14px;cursor:pointer">'+
+      var canEdit=!isGuest;
+      h2+='<div class="ritem" '+(canEdit?'onclick="togglePastAtt(\''+pp.id+'\')"':'')+' style="padding:9px 14px;cursor:'+(canEdit?'pointer':'default')+'">'+
         '<div class="rcheck'+(pon?' on':'')+'" id="pastcheck-'+pp.id+'" style="width:24px;height:24px;font-size:11px">'+(pon?'&#10003;':'')+'</div>'+
         '<div class="avatar" style="width:30px;height:30px;font-size:10px">'+initials(pp.name)+'</div>'+
         '<div style="flex:1"><div style="font-weight:500;font-size:13px;color:'+(pon?'var(--text)':'var(--text3)')+'" id="pastname-'+pp.id+'">'+pp.name+'</div>'+
